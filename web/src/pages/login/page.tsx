@@ -39,6 +39,7 @@ export default function LoginPage() {
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistDone, setWaitlistDone] = useState(false);
+  const [waitlistError, setWaitlistError] = useState('');
   // 登录页仪式感:印章延迟盖下一次(非确认时刻,无 seal-stamp 动画;仅入场淡入)。
   const [sealReady, setSealReady] = useState(false);
 
@@ -49,9 +50,19 @@ export default function LoginPage() {
 
   const handleWaitlist = async (e: FormEvent) => {
     e.preventDefault();
-    if (!waitlistEmail.trim()) return;
+    setWaitlistError('');
+    const v = waitlistEmail.trim();
+    if (!v) {
+      setWaitlistError(t('login.errorEmailRequired'));
+      return;
+    }
+    // 基础格式:避免把明显非法串当「已登记」(type=email 在部分环境不拦截脚本点击)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+      setWaitlistError(t('waitlist.invalidEmail'));
+      return;
+    }
     try {
-      await joinWaitlist(createClient({ baseURL: '' }), waitlistEmail.trim());
+      await joinWaitlist(createClient({ baseURL: '' }), v);
     } catch {
       // 与端点的去重静默语义一致:失败也不暴露细节
     }
@@ -158,21 +169,29 @@ export default function LoginPage() {
               {waitlistDone ? (
                 <p className="text-[13px] text-foreground-600">{t('waitlist.done')}</p>
               ) : waitlistOpen ? (
-                <form onSubmit={handleWaitlist} className="flex items-center gap-2">
-                  <input
-                    type="email"
-                    value={waitlistEmail}
-                    onChange={(e) => setWaitlistEmail(e.target.value)}
-                    placeholder={t('waitlist.placeholder')}
-                    autoComplete="email"
-                    className="ink-field flex-1 min-w-0"
-                  />
-                  <button
-                    type="submit"
-                    className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer shrink-0"
-                  >
-                    {t('waitlist.submit')}
-                  </button>
+                <form onSubmit={handleWaitlist} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={waitlistEmail}
+                      onChange={(e) => {
+                        setWaitlistEmail(e.target.value);
+                        setWaitlistError('');
+                      }}
+                      placeholder={t('waitlist.placeholder')}
+                      autoComplete="email"
+                      className="ink-field flex-1 min-w-0"
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer shrink-0"
+                    >
+                      {t('waitlist.submit')}
+                    </button>
+                  </div>
+                  {waitlistError && (
+                    <FormAlert className="text-left py-2">{waitlistError}</FormAlert>
+                  )}
                 </form>
               ) : (
                 <button

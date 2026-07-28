@@ -8,6 +8,8 @@ const common: Record<string, string> = {
   "nav.join": "Join",
   "nav.search": "Search",
   "nav.searchPlaceholder": "Search products, topics, or people",
+  "nav.searchEmpty": "Try a user handle (e.g. yixian)",
+  "nav.searchSoon": "Full-text search is coming — enter a handle to open a profile",
   "nav.notifications": "Notifications",
   "nav.profile": "Profile",
 
@@ -62,6 +64,8 @@ const common: Record<string, string> = {
   "profile.follow": "Follow",
   "profile.following": "Following",
   "profile.share": "Share",
+  "profile.shareCopied": "Link copied",
+  "profile.shareFailed": "Copy failed — paste from the address bar",
   "profile.thisWeek": "This Week",
   "profile.updatedAt": "Updated",
   "profile.works": "Products",
@@ -788,6 +792,7 @@ const common: Record<string, string> = {
   "waitlist.placeholder": "Your email",
   "waitlist.submit": "Join waitlist",
   "waitlist.done": "You're on the list. We'll email you when it opens.",
+  "waitlist.invalidEmail": "Enter a valid email address",
 };
 
 export default common;

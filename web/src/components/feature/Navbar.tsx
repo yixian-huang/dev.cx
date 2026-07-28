@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import LanguageSwitcher from '@/components/feature/LanguageSwitcher';
@@ -8,7 +8,9 @@ import BrandMark from '@/components/feature/BrandMark';
 
 export default function Navbar() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchHint, setSearchHint] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -99,9 +101,28 @@ export default function Navbar() {
         searchRef.current.value = '';
         searchRef.current.blur();
       }
+      setSearchHint('');
       setSearchOpen(false);
+      return;
     }
-  }, []);
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = (searchRef.current?.value ?? '').trim();
+    if (!q) {
+      setSearchHint(t('nav.searchEmpty'));
+      return;
+    }
+    // 暂无全局搜索 API:仅闭环「像 handle 的查询」→ 档案页;其余诚实提示。
+    const handleLike = q.replace(/^@/, '');
+    if (/^[a-zA-Z0-9_][a-zA-Z0-9_-]{1,31}$/.test(handleLike)) {
+      setSearchHint('');
+      setSearchOpen(false);
+      if (searchRef.current) searchRef.current.value = '';
+      navigate(`/@${handleLike}`);
+      return;
+    }
+    setSearchHint(t('nav.searchSoon'));
+  }, [navigate, t]);
 
   const navLinkClass = (path: string) => {
     const isActive = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
@@ -141,19 +162,33 @@ export default function Navbar() {
 
         {/* Right: actions */}
         <div className="flex items-center gap-2 shrink-0 font-label">
-          {/* Search — always visible */}
+          {/* Search — always visible; Enter 见 handleSearchKeyDown */}
           <div ref={searchContainerRef} className="relative flex items-center">
             {searchOpen ? (
-              <input
-                ref={searchRef}
-                type="text"
-                placeholder={t('nav.searchPlaceholder')}
-                onKeyDown={handleSearchKeyDown}
-                className="w-44 text-sm bg-background-100 text-foreground-900 placeholder:text-foreground-300 px-3 py-1.5 rounded-xs outline-none transition-all duration-200"
-              />
+              <div className="relative">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  placeholder={t('nav.searchPlaceholder')}
+                  onKeyDown={handleSearchKeyDown}
+                  onChange={() => setSearchHint('')}
+                  className="w-44 text-sm bg-background-100 text-foreground-900 placeholder:text-foreground-300 px-3 py-1.5 rounded-xs outline-none transition-all duration-200"
+                />
+                {searchHint && (
+                  <p
+                    role="status"
+                    className="absolute top-full right-0 mt-1.5 w-56 px-2.5 py-1.5 text-[11px] leading-snug text-foreground-700 bg-background-50 border border-foreground-200/50 rounded-xs shadow-sm z-50"
+                  >
+                    {searchHint}
+                  </p>
+                )}
+              </div>
             ) : (
               <button
-                onClick={() => setSearchOpen(true)}
+                onClick={() => {
+                  setSearchOpen(true);
+                  setSearchHint('');
+                }}
                 className="w-8 h-8 flex items-center justify-center text-foreground-500 hover:text-foreground-800 transition-colors duration-200 cursor-pointer bg-transparent border-none p-0"
                 aria-label={t('nav.search')}
               >

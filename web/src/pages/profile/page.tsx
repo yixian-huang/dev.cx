@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router-dom';
 import PageShell from '@/components/feature/PageShell';
@@ -16,6 +17,7 @@ import { unwrap, type ApiUser } from '@/lib/adapters/api-types';
 export default function ProfilePage() {
   const { t } = useTranslation();
   const { user: viewer } = useAuth();
+  const [shareState, setShareState] = useState<'idle' | 'copied' | 'failed'>('idle');
   // handleParam 来自 HandleRoute 挂的 "/:handleParam" 路由段(带 '@' 前缀,HandleRoute 已经
   // 校验过形状才会渲染到这个组件),本页与 HandleRoute 共享同一个匹配上下文,直接
   // useParams() 就能读到,不需要 HandleRoute 往下传 props。
@@ -61,6 +63,32 @@ export default function ProfilePage() {
 
   const profile = adaptProfile(apiUser);
 
+  const handleShare = useCallback(async () => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    if (!url) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // 降级:选中临时 input
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setShareState('copied');
+      window.setTimeout(() => setShareState('idle'), 2000);
+    } catch {
+      setShareState('failed');
+      window.setTimeout(() => setShareState('idle'), 2500);
+    }
+  }, []);
+
   return (
     <PageShell width="wide">
       {/* ── Profile Hero with public actions ── */}
@@ -82,8 +110,16 @@ export default function ProfilePage() {
                 <span className="font-mono text-foreground-600">{profile.stats.followers}</span> {t('profile.followers')}
               </span>
             )}
-            <button className="inline-flex items-center px-4 py-1.5 text-sm text-foreground-600 hover:text-foreground-900 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none">
-              {t('profile.share')}
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="inline-flex items-center px-4 py-1.5 text-sm text-foreground-600 hover:text-foreground-900 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none"
+            >
+              {shareState === 'copied'
+                ? t('profile.shareCopied')
+                : shareState === 'failed'
+                  ? t('profile.shareFailed')
+                  : t('profile.share')}
             </button>
           </>
         }

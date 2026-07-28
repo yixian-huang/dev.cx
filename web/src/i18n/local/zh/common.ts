@@ -8,6 +8,8 @@ const common: Record<string, string> = {
   "nav.join": "加入",
   "nav.search": "搜索",
   "nav.searchPlaceholder": "搜索产品、话题或用户",
+  "nav.searchEmpty": "输入用户 handle 试试（如 yixian）",
+  "nav.searchSoon": "全文搜索即将上线；可先输入 handle 直达主页",
   "nav.notifications": "通知",
   "nav.profile": "个人主页",
 
@@ -62,6 +64,8 @@ const common: Record<string, string> = {
   "profile.follow": "关注",
   "profile.following": "已关注",
   "profile.share": "分享",
+  "profile.shareCopied": "链接已复制",
+  "profile.shareFailed": "复制失败，请手动复制地址栏",
   "profile.thisWeek": "本周在做",
   "profile.updatedAt": "更新于",
   "profile.works": "产品",
@@ -785,6 +789,7 @@ const common: Record<string, string> = {
   "waitlist.placeholder": "你的邮箱",
   "waitlist.submit": "排队",
   "waitlist.done": "已登记。开放时我们会写信给你。",
+  "waitlist.invalidEmail": "请填写有效的邮箱地址",
 };
 
 export default common;
