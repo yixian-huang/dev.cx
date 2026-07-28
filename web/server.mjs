@@ -340,6 +340,57 @@ async function handleSitemap(res) {
   res.end(sitemapCache.xml)
 }
 
+// 与 api CookieName 一致——有 session 的 HTML 含 auth 岛,绝不能进共享缓存。
+const SESSION_COOKIE = 'devcx_session'
+
+// 可匿名短缓存的公开路径(与 meta 私有前缀互补)。写路径 / 登录态页一律 no-store。
+function isPublicCacheablePath(pathname) {
+  if (!pathname || pathname === '/index.html') return false
+  // 私有/写路径
+  const privateExact = new Set([
+    '/me', '/notifications', '/compose', '/new', '/new-project', '/onboarding',
+    '/login', '/admin', '/verify-email', '/reset-password', '/design-system',
+  ])
+  if (privateExact.has(pathname)) return false
+  if (pathname.startsWith('/me/')) return false
+  if (pathname.startsWith('/admin')) return false
+  if (pathname.startsWith('/p/') && pathname.endsWith('/settings')) return false
+  // 公开实体 + 列表 + 静态说明页
+  if (pathname === '/') return true
+  if (pathname === '/feed' || pathname === '/explore') return true
+  if (pathname === '/about' || pathname === '/guidelines' || pathname === '/privacy' || pathname === '/terms') return true
+  if (pathname.startsWith('/@')) return true
+  if (/^\/p\/[^/]+$/.test(pathname)) return true
+  if (/^\/t\/[^/]+$/.test(pathname)) return true
+  if (/^\/weekly\/[^/]+$/.test(pathname)) return true
+  return false
+}
+
+function hasSessionCookie(cookieHeader) {
+  if (!cookieHeader) return false
+  // 简单包含匹配够用:Set-Cookie 名固定,值不含该名作为子串的风险可忽略
+  return cookieHeader.split(';').some((part) => {
+    const p = part.trim()
+    return p === SESSION_COOKIE || p.startsWith(`${SESSION_COOKIE}=`)
+  })
+}
+
+/** 匿名公开页允许 CDN 短缓存;有 session 或私有路径 no-store。始终 Vary: Cookie。 */
+function setHtmlCacheHeaders(res, { pathname, cookieHeader, status }) {
+  res.setHeader('vary', 'Cookie')
+  // 4xx/5xx 与降级壳不共享缓存,避免把错误页钉在边缘
+  if (status && status >= 400) {
+    res.setHeader('cache-control', 'private, no-store')
+    return
+  }
+  if (hasSessionCookie(cookieHeader) || !isPublicCacheablePath(pathname)) {
+    res.setHeader('cache-control', 'private, no-store')
+    return
+  }
+  // 浏览器不长缓存(max-age=0),边缘 60s + SWR 降低回源;内容站新鲜度可接受。
+  res.setHeader('cache-control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=120')
+}
+
 async function handleSSR(req, res, url) {
   const pathname = url.pathname
   // metaForRoute/canonicalPath 做的是字面量前缀匹配（如 pathname.startsWith('/@')），跟
@@ -404,16 +455,27 @@ async function handleSSR(req, res, url) {
       .replace('<!--app-html-->', () => html)
       .replace('<!--app-data-->', () => serializeData(data))
 
-    res.statusCode = out.status ?? 200
+    const status = out.status ?? 200
+    res.statusCode = status
     res.setHeader('content-type', 'text/html; charset=utf-8')
-    res.setHeader('cache-control', 'no-store')
+    setHtmlCacheHeaders(res, {
+      pathname: decodedPathname,
+      cookieHeader: req.headers.cookie,
+      status,
+    })
     res.end(page)
   } catch (err) {
     // 绝不白屏：降级为 SPA 骨架
     console.error('[ssr] render failed, falling back to shell:', err)
     res.statusCode = 200
     res.setHeader('content-type', 'text/html; charset=utf-8')
-    res.setHeader('cache-control', 'no-store')
+    setHtmlCacheHeaders(res, {
+      pathname: decodedPathname,
+      cookieHeader: req.headers.cookie,
+      status: 200,
+    })
+    // 降级壳可能缺 auth 岛——即便路径公开也勿共享缓存,避免把空壳钉在边缘
+    res.setHeader('cache-control', 'private, no-store')
     res.end(shell(template))
   }
 }

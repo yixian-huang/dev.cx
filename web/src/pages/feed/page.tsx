@@ -3,6 +3,7 @@ import { useState } from 'react';
 import PageShell from '@/components/feature/PageShell';
 import PostList from '@/components/feature/PostList';
 import ChapterLabel from '@/components/base/ChapterLabel';
+import PageSkeleton from '@/components/base/PageSkeleton';
 import { useApiData, clientFetch } from '@/lib/use-api-data';
 import { adaptFeedItem } from '@/lib/adapters/post';
 import type { ApiPost, PostsEnvelope, StatsEnvelope } from '@/lib/adapters/api-types';
@@ -42,9 +43,9 @@ export default function FeedPage() {
     }
   };
 
-  // 取数中(没有 SSR 值、客户端重取还未回来):没有骨架组件,留空,不展示 mock 计数/mock 列表。
+  // 取数中(无 SSR / 预取未命中):列表骨架。
   if (!data && loading) {
-    return <PageShell pageEnter>{null}</PageShell>;
+    return <PageSkeleton variant="list" />;
   }
 
   return (

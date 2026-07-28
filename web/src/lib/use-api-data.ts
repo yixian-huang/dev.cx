@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient, type ApiError } from './api'
+import { getFreshApiCache, prefetchApi } from './api-cache'
 import { useSSRData } from './ssr-data'
 
 // consumed 这套 Set 只有浏览器语义下才有意义:避免 SPA 导航回同一路由时复用陈旧的 SSR 值。
@@ -30,6 +31,9 @@ export function resolveInitialState(key: string, ssrValue: unknown, isServer: bo
 }
 
 export async function clientFetch<T>(baseURL: string, path: string): Promise<T> {
+  if (!baseURL && typeof window !== 'undefined') {
+    return prefetchApi(path) as Promise<T>
+  }
   return createClient({ baseURL }).get<T>(path)
 }
 
@@ -41,6 +45,11 @@ export function useApiData<T>(key: string, path: string | null, refreshToken = 0
   const ssrValue = useSSRData<T>(key)
   const [state, setState] = useState<{ data: T | undefined; loading: boolean; error: ApiError | null }>(() => {
     if (resolveInitialState(key, ssrValue, isServer)) return { data: ssrValue, loading: false, error: null }
+    // 站内 Link 预取命中:首帧即有数据,避免 SPA 导航白屏一截
+    if (!isServer && path) {
+      const cached = getFreshApiCache<T>(path)
+      if (cached !== undefined) return { data: cached, loading: false, error: null }
+    }
     return { data: undefined, loading: path !== null, error: null }
   })
   // 记录上次见过的 refreshToken:只有它变化时才允许绕开"data 已存在则不重取"的守卫。
@@ -59,9 +68,9 @@ export function useApiData<T>(key: string, path: string | null, refreshToken = 0
     lastRefreshToken.current = refreshToken
     if (path === null || (state.data !== undefined && !refreshed)) return
     let alive = true
-    clientFetch<T>('', path)
+    prefetchApi(path, { force: refreshed })
       .then((d) => {
-        if (alive) setState({ data: d, loading: false, error: null })
+        if (alive) setState({ data: d as T, loading: false, error: null })
       })
       .catch((e) => {
         if (alive) setState({ data: undefined, loading: false, error: e as ApiError })

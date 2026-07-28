@@ -4,6 +4,7 @@ import PageShell from '@/components/feature/PageShell';
 import ProjectListItem from '@/components/feature/ProjectListItem';
 import ChapterLabel from '@/components/base/ChapterLabel';
 import EmptyState from '@/components/base/EmptyState';
+import PageSkeleton from '@/components/base/PageSkeleton';
 import type { StageKey } from '@/lib/adapters/types';
 import { useApiData, clientFetch } from '@/lib/use-api-data';
 import { adaptExploreProject } from '@/lib/adapters/project';
@@ -85,9 +86,9 @@ export default function ExplorePage() {
       active ? 'text-foreground-950 font-medium' : 'text-foreground-400 hover:text-foreground-700'
     }`;
 
-  // 取数中(没有 SSR 值、客户端重取还未回来):没有骨架组件,留空,不展示 mock 列表。
+  // 取数中(无 SSR / 预取未命中):列表骨架。
   if (!data && loading) {
-    return <PageShell pageEnter>{null}</PageShell>;
+    return <PageSkeleton variant="list" />;
   }
 
   return (

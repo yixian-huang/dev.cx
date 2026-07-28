@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import PageShell from '@/components/feature/PageShell';
 import EmptyState from '@/components/base/EmptyState';
+import PageSkeleton from '@/components/base/PageSkeleton';
 import type { BaseThread, ThreadReply } from '@/lib/adapters/types';
 import { useApiData } from '@/lib/use-api-data';
 import useDocumentTitle from '@/hooks/useDocumentTitle';
@@ -141,9 +142,9 @@ export default function ThreadPage() {
     setReplyToId(replyId);
   }, []);
 
-  // 取数中(没有 SSR 值、客户端重取还未回来):没有骨架组件,留空。
+  // 取数中(无 SSR / 预取未命中):文章骨架,避免整页空白。
   if (!apiPost && postLoading) {
-    return <PageShell pageEnter>{null}</PageShell>;
+    return <PageSkeleton variant="article" />;
   }
   // 确认为空(取到了、帖子确实不存在——404):空态,不回落 mock 帖子。
   if (!apiPost) {

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import PageShell from '@/components/feature/PageShell';
 import EmptyState from '@/components/base/EmptyState';
+import PageSkeleton from '@/components/base/PageSkeleton';
 import LoginPrompt from '@/components/base/LoginPrompt';
 import { useApiData, clientFetch } from '@/lib/use-api-data';
 import { createClient } from '@/lib/api';
@@ -135,7 +136,7 @@ export default function NotificationsPage() {
   }
 
   if (!data && loading) {
-    return <PageShell pageEnter>{null}</PageShell>;
+    return <PageSkeleton variant="list" />;
   }
 
   return (

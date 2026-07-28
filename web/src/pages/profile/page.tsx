@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router-dom';
 import PageShell from '@/components/feature/PageShell';
 import EmptyState from '@/components/base/EmptyState';
+import PageSkeleton from '@/components/base/PageSkeleton';
 import FollowButton from '@/components/feature/FollowButton';
 import ProfileHero from '@/pages/profile/components/ProfileHero';
 import ProfileTabs from '@/pages/profile/components/ProfileTabs';
@@ -44,10 +45,9 @@ export default function ProfilePage() {
     return <Navigate to={`/@${movedTo}`} replace />;
   }
 
-  // 取数中(没有 SSR 值、客户端重取还未回来):没有骨架组件,留空,不展示上一个 handle 的
-  // 陈旧内容或 mock 数据。
+  // 取数中(无 SSR / 预取未命中):骨架占位,不展示上一个 handle 的陈旧内容。
   if (!apiUser && loading) {
-    return <PageShell width="wide">{null}</PageShell>;
+    return <PageSkeleton variant="profile" width="wide" />;
   }
 
   // 确认为空(resolve 命中不了 —— 404/dangling):空态,不回落 mock 用户。

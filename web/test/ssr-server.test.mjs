@@ -146,7 +146,36 @@ test('user content with $ replacement patterns does not corrupt template injecti
     assert.ok(!html.includes('<!--app-html-->'), 'app-html placeholder leaked into DOM')
     assert.ok(!html.includes('<!--app-data-->'), 'app-data placeholder leaked into DOM')
     assert.ok(html.includes(bio), 'hydration data corrupted: bio with $ patterns not intact')
-    assert.equal(res.headers.get('cache-control'), 'no-store', 'ssr html response must be no-store')
+    // 匿名公开页允许边缘短缓存;必须带 Vary: Cookie,避免登录态串缓存
+    const cc = res.headers.get('cache-control') || ''
+    assert.ok(cc.includes('s-maxage=60'), `anonymous public html should short-cache, got ${cc}`)
+    assert.ok((res.headers.get('vary') || '').toLowerCase().includes('cookie'), 'must Vary: Cookie')
+  } finally { ssr.child.kill(); api.srv.close() }
+})
+
+test('session cookie forces private no-store on public path', async () => {
+  const api = await stubAPI({
+    '/api/resolve/chip': { body: { user: { handle: 'chip', display_name: 'Chip', bio: '' } } },
+    '/api/users/chip/projects': { body: { projects: [] } },
+  })
+  const ssr = await startSSR(api.port, 5208)
+  try {
+    const res = await fetch(`http://127.0.0.1:${ssr.port}/@chip`, {
+      headers: { cookie: 'devcx_session=test-token' },
+    })
+    assert.equal(res.status, 200)
+    const cc = res.headers.get('cache-control') || ''
+    assert.ok(cc.includes('no-store'), `logged-in html must not be shared, got ${cc}`)
+  } finally { ssr.child.kill(); api.srv.close() }
+})
+
+test('private path is always no-store even without cookie', async () => {
+  const api = await stubAPI({})
+  const ssr = await startSSR(api.port, 5209)
+  try {
+    const res = await fetch(`http://127.0.0.1:${ssr.port}/login`)
+    const cc = res.headers.get('cache-control') || ''
+    assert.ok(cc.includes('no-store'), `private path must be no-store, got ${cc}`)
   } finally { ssr.child.kill(); api.srv.close() }
 })
 
