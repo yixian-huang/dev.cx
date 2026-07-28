@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import RichTextarea from '@/components/base/RichTextarea';
@@ -32,12 +32,22 @@ export default function ReplyComposer({
   const [text, setText] = useState('');
   const [localError, setLocalError] = useState<string | undefined>(undefined);
   const [sending, setSending] = useState(false);
+  const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (replyToFloor !== undefined) {
       setExpanded(true);
     }
   }, [replyToFloor]);
+
+  // 展开后滚入视口(短帖 dock 在文档末尾时,否则发布钮会在折线外/被底栏挡住)
+  useEffect(() => {
+    if (!expanded) return;
+    const id = window.requestAnimationFrame(() => {
+      shellRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [expanded, docked]);
 
   // 父级 API 错误到达时清本地空内容提示,避免叠两句
   useEffect(() => {
@@ -82,13 +92,15 @@ export default function ReplyComposer({
     ? `${t('thread.replyTo', { floor: replyToFloor ?? 0 })} @${replyToAuthor}`
     : t('thread.replyPlaceholder');
 
+  // 未 dock 时 fixed 贴底。底栏在 <lg 或触控预览下可见(见 index.css .mobile-tabs-*),
+  // 必须抬高,否则「发布回复」会落在底栏之下;lg 与桌面 pointer 下底栏隐藏 → bottom-0。
   const shellClass = docked
-    ? 'relative w-full pt-4 pb-6'
-    : 'fixed bottom-0 left-0 right-0 z-40 px-6 pb-4 pt-2';
+    ? 'relative w-full pt-4 pb-20 lg:pb-6'
+    : 'fixed left-0 right-0 z-[90] px-6 pt-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-0 pb-3 lg:pb-4';
 
   if (!isLoggedIn) {
     return (
-      <div className={shellClass}>
+      <div ref={shellRef} className={shellClass}>
         <div className="max-w-[640px] mx-auto">
           <Link
             to="/login"
@@ -111,7 +123,7 @@ export default function ReplyComposer({
 
   if (!expanded) {
     return (
-      <div className={shellClass}>
+      <div ref={shellRef} className={shellClass}>
         <div className="max-w-[640px] mx-auto space-y-2">
           {!emailVerified && (
             <FormAlert tone="info">{t('compose.needEmailVerify')}</FormAlert>
@@ -136,7 +148,14 @@ export default function ReplyComposer({
   const displayError = localError || error;
 
   return (
-    <div className={docked ? 'relative w-full pt-4 pb-6' : 'fixed bottom-0 left-0 right-0 z-40 px-6 pb-6 pt-2'}>
+    <div
+      ref={shellRef}
+      className={
+        docked
+          ? 'relative w-full pt-4 pb-20 lg:pb-6'
+          : 'fixed left-0 right-0 z-[90] px-6 pt-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-0 pb-3 lg:pb-6'
+      }
+    >
       <div className="max-w-[640px] mx-auto">
         <div className="bg-background-50 border border-background-200/70 rounded-md overflow-hidden">
           {replyToAuthor && (

@@ -338,8 +338,8 @@ export default function ThreadPage() {
       {/* Docking sentinel */}
       <div ref={dockSentinelRef} className="h-1" />
 
-      {/* Spacer for floating composer when not docked */}
-      {!docked && isLoggedIn && <div className="h-20" />}
+      {/* Spacer for floating composer when not docked; mobile 再加底栏高度 */}
+      {!docked && isLoggedIn && <div className="h-20 lg:h-20 mb-14 lg:mb-0" aria-hidden />}
 
       {/* Composer: floats or docks based on scroll */}
       <ReplyComposer
