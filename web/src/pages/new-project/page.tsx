@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageShell from '@/components/feature/PageShell';
 import ProjectFormFields from '@/components/feature/ProjectFormFields';
+import FormAlert from '@/components/base/FormAlert';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient, type ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-errors';
@@ -150,21 +151,16 @@ export default function NewProjectPage() {
       </header>
 
       {showErrors && (fieldErrors.length > 0 || createError) && (
-        <div
-          role="alert"
-          className="mb-3 px-3.5 py-2.5 bg-primary-50 border border-primary-100 rounded-xs"
-        >
-          <p className="text-[13px] font-medium text-primary-700 leading-relaxed">
-            {createError ?? t('newProject.formIncomplete')}
-          </p>
+        <FormAlert className="mb-3">
+          <p>{createError ?? t('newProject.formIncomplete')}</p>
           {fieldErrors.length > 0 && (
-            <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+            <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-normal">
               {fieldErrors.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     onClick={() => focusProjectField(item.id)}
-                    className="text-left text-[12px] text-primary-700/90 hover:text-primary-600 underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0"
+                    className="text-left text-[12px] underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0 text-inherit"
                   >
                     · {t(item.error.key, item.error.params)}
                   </button>
@@ -172,13 +168,13 @@ export default function NewProjectPage() {
               ))}
             </ul>
           )}
-        </div>
+        </FormAlert>
       )}
 
       {!emailVerified && (
-        <div className="mb-3 px-3.5 py-2.5 bg-accent-100/50 border border-accent-500/30 rounded-xs text-[12px] text-foreground-700 leading-relaxed">
+        <FormAlert tone="info" className="mb-3">
           {t('compose.needEmailVerify')}
-        </div>
+        </FormAlert>
       )}
 
       <ProjectFormFields
@@ -195,9 +191,9 @@ export default function NewProjectPage() {
 
       {/* 动作:贴表单底,非超高 sticky,减少「表单+底栏」叠高 */}
       <div className="mt-4 pt-3 border-t border-foreground-200/40 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between pb-8">
-        <div className="min-h-[1.25rem]">
+        <div className="min-h-[1.25rem] flex-1 min-w-0">
           {(createError || (showErrors && fieldErrors.length > 0)) && (
-            <p role="alert" className="text-[12px] font-medium text-primary-700 leading-relaxed">
+            <FormAlert className="py-2">
               {createError ?? t('newProject.formIncomplete')}
               {fieldErrors[0] && (
                 <>
@@ -205,13 +201,13 @@ export default function NewProjectPage() {
                   <button
                     type="button"
                     onClick={() => focusProjectField(fieldErrors[0].id)}
-                    className="underline underline-offset-2 hover:text-primary-600 cursor-pointer bg-transparent border-none p-0 text-inherit"
+                    className="underline underline-offset-2 hover:opacity-80 cursor-pointer bg-transparent border-none p-0 text-inherit"
                   >
                     {t('newProject.jumpToError')}
                   </button>
                 </>
               )}
-            </p>
+            </FormAlert>
           )}
         </div>
         <div className="flex items-center justify-end gap-3 shrink-0">

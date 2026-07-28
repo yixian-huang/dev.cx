@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import RichTextarea from '@/components/base/RichTextarea';
+import FormAlert from '@/components/base/FormAlert';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ReplyComposerProps {
@@ -113,9 +114,7 @@ export default function ReplyComposer({
       <div className={shellClass}>
         <div className="max-w-[640px] mx-auto space-y-2">
           {!emailVerified && (
-            <p className="px-3 py-2 text-[12px] text-foreground-700 bg-accent-100/50 border border-accent-500/30 rounded-xs">
-              {t('compose.needEmailVerify')}
-            </p>
+            <FormAlert tone="info">{t('compose.needEmailVerify')}</FormAlert>
           )}
           <button
             type="button"
@@ -158,9 +157,9 @@ export default function ReplyComposer({
 
           <div className="p-4">
             {!emailVerified && (
-              <p className="mb-3 px-3 py-2 text-[12px] text-foreground-700 bg-accent-100/50 border border-accent-500/30 rounded-xs leading-relaxed">
+              <FormAlert tone="info" className="mb-3">
                 {t('compose.needEmailVerify')}
-              </p>
+              </FormAlert>
             )}
             <RichTextarea
               value={text}
@@ -195,11 +194,7 @@ export default function ReplyComposer({
               </button>
             </div>
 
-            {displayError && (
-              <p role="alert" className="mt-2 text-[13px] font-medium text-primary-700 leading-relaxed">
-                {displayError}
-              </p>
-            )}
+            {displayError && <FormAlert className="mt-2">{displayError}</FormAlert>}
           </div>
         </div>
       </div>

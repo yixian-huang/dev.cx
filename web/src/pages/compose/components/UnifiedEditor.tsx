@@ -7,6 +7,7 @@ import { useMyProjects } from '@/hooks/useMyProjects';
 import { createClient, type ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-errors';
 import { createPost, patchPost } from '@/lib/actions';
+import FormAlert from '@/components/base/FormAlert';
 
 export type PostType = 'show' | 'build' | 'discuss';
 
@@ -365,9 +366,9 @@ export default function UnifiedEditor({
       )}
 
       {!emailVerified && (
-        <div className="mt-4 px-3.5 py-3 bg-accent-100/50 border border-accent-500/30 rounded-xs text-[13px] text-foreground-700 leading-relaxed">
+        <FormAlert tone="info" className="mt-4">
           {t('compose.needEmailVerify')}
-        </div>
+        </FormAlert>
       )}
 
       {/* 标题 */}
@@ -439,17 +440,17 @@ export default function UnifiedEditor({
       </div>
 
       {(publishError || draftError) && (
-        <p role="alert" className="text-[13px] text-primary-700 mt-4 leading-relaxed">
+        <FormAlert className="mt-4">
           {publishError || draftError}
           {publishError === t('compose.needProjectCreateFirst') && (
             <>
               {' '}
-              <Link to="/new-project" className="underline underline-offset-2 hover:text-primary-600">
+              <Link to="/new-project" className="underline underline-offset-2 hover:opacity-80">
                 {t('compose.createProjectFirst')}
               </Link>
             </>
           )}
-        </p>
+        </FormAlert>
       )}
 
       {/* 动作行 */}

@@ -129,23 +129,9 @@ export default function ComposePage() {
   }, [loadSlug, loadMode, isLoggedIn, navigate, t]);
 
   const handlePublished = useCallback((slug: string) => {
-    // 编辑模式保存后回帖子页
-    if (editParam) {
-      navigate(`/t/${slug}`, { replace: true });
-      return;
-    }
-    setPublishedSlug(slug);
-    setLastSaved(null);
-    setDraftSeed(null);
-    // 清掉 ?draft= 残留,成功页 URL 干净,避免用户以为还在草稿态
-    // 注意:先设 publishedSlug 再 replace 路由 query,组件仍在同一 /compose 页
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('draft');
-      url.searchParams.delete('edit');
-      window.history.replaceState({}, '', url.pathname + (url.search || ''));
-    }
-  }, [editParam, navigate]);
+    // 发布/编辑成功一律进帖子页,用户立即看到结果,无需再点「查看帖子」
+    navigate(`/t/${slug}`, { replace: true });
+  }, [navigate]);
 
   const handleDraftSaved = useCallback((_slug: string, at: Date) => {
     setLastSaved(at);

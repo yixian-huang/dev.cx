@@ -7,6 +7,7 @@ import { createClient, type ApiError } from '@/lib/api';
 import { forgotPassword, joinWaitlist } from '@/lib/actions';
 import Footer from '@/components/feature/Footer';
 import BrandMark from '@/components/feature/BrandMark';
+import FormAlert from '@/components/base/FormAlert';
 import LoginForm from './components/LoginForm';
 import OAuthSection from './components/OAuthSection';
 
@@ -121,21 +122,13 @@ export default function LoginPage() {
           </p>
 
           {error && (
-            <div
-              role="alert"
-              className="mb-5 px-4 py-3 bg-primary-50 border border-primary-100 rounded-xs text-[13px] leading-relaxed text-primary-700"
-            >
-              {error}
-            </div>
+            <FormAlert className="mb-5">{error}</FormAlert>
           )}
 
           {resetSent && (
-            <div
-              role="status"
-              className="mb-5 px-4 py-3 bg-background-100 border border-foreground-200/40 rounded-xs text-[13px] leading-relaxed text-foreground-700"
-            >
+            <FormAlert tone="info" className="mb-5">
               {t('reset.sent')}
-            </div>
+            </FormAlert>
           )}
 
           <LoginForm

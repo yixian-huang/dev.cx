@@ -6,6 +6,7 @@ import { apiErrorMessage } from '@/lib/api-errors';
 import type { ApiError } from '@/lib/api';
 import Footer from '@/components/feature/Footer';
 import BrandMark from '@/components/feature/BrandMark';
+import FormAlert from '@/components/base/FormAlert';
 
 // 注册单屏化:旧的三步向导(身份 9 字段 → 作品 → 打招呼)把「创建账号」和「完善档案」捆在
 // 最后一步的四段链式提交里——中途流失连账号都没建成,第 1 步的字段错误也要拖到最后才暴露。
@@ -70,11 +71,7 @@ export default function OnboardingPage() {
           </h1>
           <p className="text-[14px] text-foreground-400 mb-8">{t('login.registerDeck')}</p>
 
-          {error && (
-            <div className="mb-4 px-4 py-3 bg-primary-50/60 rounded-xs text-[13px] text-primary-700">
-              {error}
-            </div>
-          )}
+          {error && <FormAlert className="mb-4">{error}</FormAlert>}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {presetInvite ? (

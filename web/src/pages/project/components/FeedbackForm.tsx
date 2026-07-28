@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
+import FormAlert from '@/components/base/FormAlert';
 
 interface Props {
   open: boolean;
@@ -65,9 +66,9 @@ export default function FeedbackForm({ open, submitting, error, onSubmit, onCanc
         </div>
 
         {!emailVerified && (
-          <p className="mb-3 px-3 py-2 text-[12px] text-foreground-700 bg-accent-100/50 border border-accent-500/30 rounded-xs leading-relaxed">
+          <FormAlert tone="info" className="mb-3">
             {t('compose.needEmailVerify')}
-          </p>
+          </FormAlert>
         )}
 
         <div className="space-y-3 mb-2">
@@ -103,11 +104,7 @@ export default function FeedbackForm({ open, submitting, error, onSubmit, onCanc
           </div>
         </div>
 
-        {displayError && (
-          <p role="alert" className="text-[13px] font-medium text-primary-700 mt-2 leading-relaxed">
-            {displayError}
-          </p>
-        )}
+        {displayError && <FormAlert className="mt-2">{displayError}</FormAlert>}
 
         <div className="flex items-center justify-end gap-3 mt-5">
           <button

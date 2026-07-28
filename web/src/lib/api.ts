@@ -37,10 +37,19 @@ export function createClient(opts: { baseURL: string; cookie?: string }): ApiCli
       parsed = null
     }
     if (!res.ok) {
-      const code =
+      let code =
         parsed && typeof parsed === 'object' && 'error' in parsed
           ? String((parsed as { error: unknown }).error)
           : 'unknown'
+      // 上游返回 HTML 错误页时没有 JSON code——用状态码兜底,前端好展示清晰文案
+      if (code === 'unknown') {
+        if (res.status === 502) code = 'bad_gateway'
+        else if (res.status === 504) code = 'gateway_timeout'
+        else if (res.status === 429) code = 'rate_limited'
+        else if (res.status === 401) code = 'auth_required'
+        else if (res.status === 403) code = 'forbidden'
+        else if (res.status === 404) code = 'not_found'
+      }
       throw apiError(res.status, code)
     }
     return parsed as T
