@@ -9,14 +9,24 @@ import { createPost } from '@/lib/actions';
 
 export type PostType = 'show' | 'build' | 'discuss';
 
+export type DraftSeed = {
+  slug: string;
+  type: PostType;
+  title: string;
+  body_md: string;
+  project_slug?: string;
+  feedback_wanted?: string[];
+};
+
 interface UnifiedEditorProps {
   initialType: PostType;
   /** 锁定态(反馈/写进度/分享成果入口):类型不可切、关联产品固定。 */
   locked?: boolean;
   lockedProjectId?: string | null;
+  /** 从 /compose?draft= 恢复 */
+  seed?: DraftSeed | null;
   onPublished: (slug: string) => void;
-  onSaveDraft: () => void;
-  onAutoSaveTrigger: () => void;
+  onDraftSaved: (slug: string, at: Date) => void;
 }
 
 const TYPE_META: Record<PostType, { subtitleKey: string; titleKey: string; bodyKey: string }> = {
@@ -39,28 +49,38 @@ export default function UnifiedEditor({
   initialType,
   locked = false,
   lockedProjectId,
+  seed = null,
   onPublished,
-  onSaveDraft,
-  onAutoSaveTrigger,
+  onDraftSaved,
 }: UnifiedEditorProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const myProjects = useMyProjects();
 
-  const [postType, setPostType] = useState<PostType>(initialType);
-  const [projectId, setProjectId] = useState(lockedProjectId ?? '');
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [feedback, setFeedback] = useState<string[]>([]);
+  const [postType, setPostType] = useState<PostType>(seed?.type ?? initialType);
+  const [projectId, setProjectId] = useState(seed?.project_slug ?? lockedProjectId ?? '');
+  const [title, setTitle] = useState(seed?.title ?? '');
+  const [body, setBody] = useState(seed?.body_md ?? '');
+  const [feedback, setFeedback] = useState<string[]>(seed?.feedback_wanted ?? []);
   const [customChips, setCustomChips] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
+  const [draftSlug, setDraftSlug] = useState<string | null>(seed?.slug ?? null);
 
   const [projectOpen, setProjectOpen] = useState(false);
   const projectRef = useRef<HTMLDivElement>(null);
 
   const [publishing, setPublishing] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [publishError, setPublishError] = useState<string | undefined>(undefined);
+  const [draftError, setDraftError] = useState<string | undefined>(undefined);
+
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSlugRef = useRef(draftSlug);
+  draftSlugRef.current = draftSlug;
+  // 最新表单快照供 debounce 回调读取，避免闭包过期
+  const formRef = useRef({ postType, projectId, title, body, feedback });
+  formRef.current = { postType, projectId, title, body, feedback };
 
   useEffect(() => {
     if (!projectOpen) return;
@@ -71,7 +91,63 @@ export default function UnifiedEditor({
     return () => document.removeEventListener('mousedown', close);
   }, [projectOpen]);
 
-  const trigger = onAutoSaveTrigger;
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, []);
+
+  const saveDraft = useCallback(async (opts?: { silent?: boolean }) => {
+    const { postType: tp, projectId: pid, title: ti, body: bo, feedback: fb } = formRef.current;
+    const needsProject = tp === 'show' || tp === 'build';
+    // 空内容 no-op；show/build 未选产品时跳过自动保存（避免 project_required 刷错）
+    if (!ti.trim() && !bo.trim()) return;
+    if (needsProject && !pid.trim()) {
+      if (!opts?.silent) setDraftError(t('compose.draftNeedsProject'));
+      return;
+    }
+    if (!opts?.silent) setDraftError(undefined);
+    setSavingDraft(true);
+    try {
+      const client = createClient({ baseURL: '' });
+      const result = await createPost(client, {
+        type: tp,
+        project_slug: pid || undefined,
+        title: ti.trim(),
+        body_md: bo,
+        status: 'draft',
+        ...(draftSlugRef.current ? { draft_slug: draftSlugRef.current } : {}),
+        ...(fb.length > 0 ? { feedback_wanted: fb } : {}),
+      });
+      setDraftSlug(result.slug);
+      draftSlugRef.current = result.slug;
+      onDraftSaved(result.slug, new Date());
+      // 同步 URL，便于刷新恢复
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('draft', result.slug);
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.status === 401) {
+        navigate('/login');
+        return;
+      }
+      if (!opts?.silent) setDraftError(apiErrorMessage(e));
+    } finally {
+      setSavingDraft(false);
+    }
+  }, [navigate, onDraftSaved, t]);
+
+  const scheduleAutoSave = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      void saveDraft({ silent: true });
+    }, 3000);
+  }, [saveDraft]);
+
+  const trigger = scheduleAutoSave;
 
   const toggleChip = (label: string) => {
     setFeedback((prev) => (prev.includes(label) ? prev.filter((c) => c !== label) : [...prev, label]));
@@ -104,6 +180,8 @@ export default function UnifiedEditor({
         project_slug: projectId || undefined,
         title: title.trim(),
         body_md: body,
+        status: 'published',
+        ...(draftSlug ? { draft_slug: draftSlug } : {}),
         ...(feedback.length > 0 ? { feedback_wanted: feedback } : {}),
       });
       onPublished(result.slug);
@@ -117,7 +195,7 @@ export default function UnifiedEditor({
     } finally {
       setPublishing(false);
     }
-  }, [canPublish, postType, projectId, title, body, feedback, navigate, onPublished]);
+  }, [canPublish, postType, projectId, title, body, feedback, draftSlug, navigate, onPublished]);
 
   const selectedProject = myProjects.find((p) => p.id === projectId);
   const presetChips = PRESET_CHIP_KEYS.map((k) => t(k));
@@ -133,7 +211,7 @@ export default function UnifiedEditor({
             return (
               <button
                 key={tp}
-                onClick={() => { if (!locked) setPostType(tp); }}
+                onClick={() => { if (!locked) { setPostType(tp); trigger(); } }}
                 disabled={locked}
                 className={`uppercase bg-transparent border-0 p-0 transition-colors duration-200 ${
                   active
@@ -269,18 +347,23 @@ export default function UnifiedEditor({
         <p className="mt-2.5 text-xs text-foreground-400">{t('compose.feedbackHint')}</p>
       </div>
 
-      {publishError && <p className="text-[13px] text-primary-700 mt-4">{publishError}</p>}
+      {(publishError || draftError) && (
+        <p className="text-[13px] text-primary-700 mt-4">{publishError || draftError}</p>
+      )}
 
       {/* 动作行 */}
       <div className="flex items-center justify-end gap-3 pt-5 pb-8">
         <button
-          onClick={onSaveDraft}
-          className="inline-flex items-center px-4 py-2 text-sm text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none"
+          type="button"
+          onClick={() => void saveDraft()}
+          disabled={savingDraft}
+          className="inline-flex items-center px-4 py-2 text-sm text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none disabled:opacity-40"
         >
-          {t('compose.saveDraft')}
+          {savingDraft ? t('compose.savingDraft') : t('compose.saveDraft')}
         </button>
         <button
-          onClick={handleSubmit}
+          type="button"
+          onClick={() => void handleSubmit()}
           disabled={!canPublish}
           className="inline-flex items-center px-5 py-2 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer"
         >

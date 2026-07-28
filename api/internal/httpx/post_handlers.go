@@ -30,10 +30,15 @@ var validPostType = map[string]bool{"show": true, "build": true, "ask": true, "d
 var mergeablePostType = map[string]bool{"ask": true, "discuss": true}
 
 func validatePostInput(typ, title, body string, fw, unc []string, links []map[string]string) string {
+	return validatePostInputOpts(typ, title, body, fw, unc, links, false)
+}
+
+// draft=true 时 title 允许空（存草稿过程中可能尚未起标题）。
+func validatePostInputOpts(typ, title, body string, fw, unc []string, links []map[string]string, draft bool) string {
 	if !validPostType[typ] {
 		return "bad_type"
 	}
-	if strings.TrimSpace(title) == "" {
+	if !draft && strings.TrimSpace(title) == "" {
 		return "bad_input"
 	}
 	if utf8.RuneCountInString(title) > maxPostTitleLen || utf8.RuneCountInString(body) > maxPostBodyLen {
@@ -75,14 +80,26 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		FeedbackWanted []string            `json:"feedback_wanted"`
 		Uncertainties  []string            `json:"uncertainties"`
 		Links          []map[string]string `json:"links"`
+		Status         string              `json:"status"`     // draft | published；默认 published
+		DraftSlug      string              `json:"draft_slug"` // 有则 upsert 该草稿
 	}
 	if err := ReadJSON(r, &in); err != nil {
 		Err(w, 400, "bad_json")
 		return
 	}
 	in.Type = strings.ToLower(strings.TrimSpace(in.Type))
-	if code := validatePostInput(in.Type, in.Title, in.BodyMD,
-		in.FeedbackWanted, in.Uncertainties, in.Links); code != "" {
+	status := strings.ToLower(strings.TrimSpace(in.Status))
+	if status == "" {
+		status = "published"
+	}
+	if status != "draft" && status != "published" {
+		Err(w, 400, "bad_status")
+		return
+	}
+	isDraft := status == "draft"
+	title := strings.TrimSpace(in.Title)
+	if code := validatePostInputOpts(in.Type, title, in.BodyMD,
+		in.FeedbackWanted, in.Uncertainties, in.Links, isDraft); code != "" {
 		Err(w, 400, code)
 		return
 	}
@@ -108,20 +125,70 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	linksJSON, _ := json.Marshal(nonNilLinks(in.Links))
+	draftSlug := strings.ToLower(strings.TrimSpace(in.DraftSlug))
+
+	// upsert 既有草稿：仅作者 + status=draft；可保留 draft 或发布 published。
+	if draftSlug != "" {
+		cur, err := scanPost(s.deps.Pool.QueryRow(ctx,
+			`select `+postCols+` from posts where slug=$1`, draftSlug))
+		if err != nil {
+			Err(w, 404, "not_found")
+			return
+		}
+		if cur.AuthorID != uid {
+			Err(w, 403, "forbidden")
+			return
+		}
+		if cur.Status != "draft" {
+			Err(w, 409, "not_draft")
+			return
+		}
+		if cur.HiddenAt != nil {
+			Err(w, 403, "hidden")
+			return
+		}
+		// 类型以 body 为准（compose 可改类型）；slug 不随标题变。
+		if _, err := s.deps.Pool.Exec(ctx,
+			`update posts set type=$1, project_id=$2, title=$3, body_md=$4, status=$5,
+			 feedback_wanted=$6, uncertainties=$7, links=$8, updated_at=now()
+			 where id=$9`,
+			in.Type, projectID, title, in.BodyMD, status,
+			nonNilStrings(in.FeedbackWanted), nonNilStrings(in.Uncertainties), linksJSON, cur.ID); err != nil {
+			Err(w, 500, "internal")
+			return
+		}
+		if status == "published" {
+			s.notifyOnCreatePost(ctx, uid, cur.ID, in.Type, in.BodyMD, projectID)
+		}
+		code := http.StatusOK
+		if status == "published" {
+			// 发布视为「创建」语义对前端仍可读 slug
+			code = http.StatusOK
+		}
+		s.writePostBySlug(w, r, draftSlug, code)
+		return
+	}
+
 	id := ids.New()
 	var slug string
 	// slug 唯一性靠数据库约束；随机后缀碰撞时重试三次
 	for attempt := 0; attempt < 3; attempt++ {
-		slug = slugs.Generate(in.Title)
+		seed := title
+		if seed == "" {
+			seed = "draft"
+		}
+		slug = slugs.Generate(seed)
 		_, err := s.deps.Pool.Exec(ctx,
-			`insert into posts (id, slug, author_id, project_id, type, title, body_md,
+			`insert into posts (id, slug, author_id, project_id, type, title, body_md, status,
 			                    feedback_wanted, uncertainties, links)
-			 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-			id, slug, uid, projectID, in.Type, strings.TrimSpace(in.Title), in.BodyMD,
+			 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+			id, slug, uid, projectID, in.Type, title, in.BodyMD, status,
 			nonNilStrings(in.FeedbackWanted), nonNilStrings(in.Uncertainties), linksJSON)
 		if err == nil {
-			// best-effort 通知：失败不阻塞发帖响应。
-			s.notifyOnCreatePost(ctx, uid, id, in.Type, in.BodyMD, projectID)
+			if status == "published" {
+				// best-effort 通知：失败不阻塞发帖响应。
+				s.notifyOnCreatePost(ctx, uid, id, in.Type, in.BodyMD, projectID)
+			}
 			s.writePostBySlug(w, r, slug, http.StatusCreated)
 			return
 		}
@@ -144,6 +211,14 @@ func (s *Server) writePostBySlug(w http.ResponseWriter, r *http.Request, slug st
 	if err != nil {
 		Err(w, 404, "not_found")
 		return
+	}
+	// 草稿仅作者 / admin 可见
+	if p.Status == "draft" {
+		viewer := currentUserID(r)
+		if viewer != p.AuthorID && !s.isAdmin(ctx, viewer) {
+			Err(w, 404, "not_found")
+			return
+		}
 	}
 	WriteJSON(w, code, map[string]any{"post": s.applyHidden(r, p, s.postJSON(ctx, p, true, true))})
 }
@@ -173,6 +248,9 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 		Err(w, 401, "auth_required")
 		return
 	}
+	if !s.writeGate(w, r, uid) {
+		return
+	}
 	slug := strings.ToLower(r.PathValue("slug"))
 	ctx := r.Context()
 	cur, err := scanPost(s.deps.Pool.QueryRow(ctx,
@@ -195,6 +273,7 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 		FeedbackWanted *[]string            `json:"feedback_wanted"`
 		Uncertainties  *[]string            `json:"uncertainties"`
 		Links          *[]map[string]string `json:"links"`
+		Status         *string              `json:"status"` // draft 可 → published
 	}
 	if err := ReadJSON(r, &in); err != nil {
 		Err(w, 400, "bad_json")
@@ -202,6 +281,10 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 	}
 	title, body := cur.Title, cur.BodyMD
 	fw, unc, links := cur.FeedbackWanted, cur.Uncertainties, cur.Links
+	status := cur.Status
+	if status == "" {
+		status = "published"
+	}
 	if in.Title != nil {
 		title = strings.TrimSpace(*in.Title)
 	}
@@ -217,7 +300,21 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 	if in.Links != nil {
 		links = *in.Links
 	}
-	if code := validatePostInput(cur.Type, title, body, fw, unc, links); code != "" {
+	if in.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*in.Status))
+		if st != "draft" && st != "published" {
+			Err(w, 400, "bad_status")
+			return
+		}
+		// 已发布不可回退为草稿（最小契约）
+		if status == "published" && st == "draft" {
+			Err(w, 409, "not_draft")
+			return
+		}
+		status = st
+	}
+	isDraft := status == "draft"
+	if code := validatePostInputOpts(cur.Type, title, body, fw, unc, links, isDraft); code != "" {
 		Err(w, 400, code)
 		return
 	}
@@ -225,12 +322,105 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 	// slug 不随标题变化——它是已经被外部引用的地址
 	if _, err := s.deps.Pool.Exec(ctx,
 		`update posts set title=$1, body_md=$2, feedback_wanted=$3, uncertainties=$4,
-		 links=$5, updated_at=now() where id=$6`,
-		title, body, nonNilStrings(fw), nonNilStrings(unc), linksJSON, cur.ID); err != nil {
+		 links=$5, status=$6, updated_at=now() where id=$7`,
+		title, body, nonNilStrings(fw), nonNilStrings(unc), linksJSON, status, cur.ID); err != nil {
 		Err(w, 500, "internal")
 		return
 	}
+	if cur.Status == "draft" && status == "published" {
+		s.notifyOnCreatePost(ctx, uid, cur.ID, cur.Type, body, cur.ProjectID)
+	}
 	s.writePostBySlug(w, r, slug, http.StatusOK)
+}
+
+func (s *Server) handleListMyDrafts(w http.ResponseWriter, r *http.Request) {
+	uid := currentUserID(r)
+	if uid == "" {
+		Err(w, 401, "auth_required")
+		return
+	}
+	ctx := r.Context()
+	q := r.URL.Query()
+	limit := 20
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 50 {
+			limit = n
+		}
+	}
+	where := []string{"author_id = $1", "status = 'draft'", "merged_into is null"}
+	args := []any{uid}
+	if c := q.Get("cursor"); c != "" {
+		ts, id, ok := parseCursor(c)
+		if !ok {
+			Err(w, 400, "bad_cursor")
+			return
+		}
+		args = append(args, ts, id)
+		where = append(where,
+			fmt.Sprintf("(updated_at, id) < ($%d, $%d)", len(args)-1, len(args)))
+	}
+	args = append(args, limit)
+	sql := `select ` + postCols + ` from posts where ` + strings.Join(where, " and ") +
+		fmt.Sprintf(` order by updated_at desc, id desc limit $%d`, len(args))
+	rows, err := s.deps.Pool.Query(ctx, sql, args...)
+	if err != nil {
+		Err(w, 500, "internal")
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	var last postRow
+	for rows.Next() {
+		p, err := scanPost(rows)
+		if err != nil {
+			Err(w, 500, "internal")
+			return
+		}
+		last = p
+		out = append(out, s.postJSON(ctx, p, true, false))
+	}
+	if rows.Err() != nil {
+		Err(w, 500, "internal")
+		return
+	}
+	var next any
+	if len(out) == limit {
+		next = last.UpdatedAt.UTC().Format(time.RFC3339Nano) + "|" + last.ID
+	}
+	WriteJSON(w, 200, map[string]any{"posts": out, "next_cursor": next})
+}
+
+func (s *Server) handleDeletePost(w http.ResponseWriter, r *http.Request) {
+	uid := currentUserID(r)
+	if uid == "" {
+		Err(w, 401, "auth_required")
+		return
+	}
+	if !s.writeGate(w, r, uid) {
+		return
+	}
+	slug := strings.ToLower(r.PathValue("slug"))
+	ctx := r.Context()
+	cur, err := scanPost(s.deps.Pool.QueryRow(ctx,
+		`select `+postCols+` from posts where slug=$1`, slug))
+	if err != nil {
+		Err(w, 404, "not_found")
+		return
+	}
+	if cur.AuthorID != uid {
+		Err(w, 403, "forbidden")
+		return
+	}
+	// 最小：仅允许删草稿；已发布走 admin 路径
+	if cur.Status != "draft" {
+		Err(w, 409, "not_draft")
+		return
+	}
+	if _, err := s.deps.Pool.Exec(ctx, `delete from posts where id=$1`, cur.ID); err != nil {
+		Err(w, 500, "internal")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleListPosts(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +432,7 @@ func (s *Server) handleListPosts(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
-	where := []string{"merged_into is null", "hidden_at is null"}
+	where := []string{"merged_into is null", "hidden_at is null", publishedOnlySQL}
 	args := []any{}
 	add := func(clause string, val any) {
 		args = append(args, val)
@@ -335,11 +525,15 @@ func (s *Server) handleMergePost(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
-	var srcID, srcAuthor, srcType string
+	var srcID, srcAuthor, srcType, srcStatus string
 	var srcMerged *string
 	if err := tx.QueryRow(ctx,
-		`select id, author_id, type, merged_into from posts where slug=$1 and hidden_at is null for update`, srcSlug).
-		Scan(&srcID, &srcAuthor, &srcType, &srcMerged); err != nil {
+		`select id, author_id, type, status, merged_into from posts where slug=$1 and hidden_at is null for update`, srcSlug).
+		Scan(&srcID, &srcAuthor, &srcType, &srcStatus, &srcMerged); err != nil {
+		Err(w, 404, "not_found")
+		return
+	}
+	if srcStatus != "published" {
 		Err(w, 404, "not_found")
 		return
 	}
@@ -347,11 +541,15 @@ func (s *Server) handleMergePost(w http.ResponseWriter, r *http.Request) {
 		Err(w, 400, "already_merged")
 		return
 	}
-	var dstID, dstAuthor, dstType string
+	var dstID, dstAuthor, dstType, dstStatus string
 	var dstMerged *string
 	if err := tx.QueryRow(ctx,
-		`select id, author_id, type, merged_into from posts where slug=$1 and hidden_at is null for update`, dstSlug).
-		Scan(&dstID, &dstAuthor, &dstType, &dstMerged); err != nil {
+		`select id, author_id, type, status, merged_into from posts where slug=$1 and hidden_at is null for update`, dstSlug).
+		Scan(&dstID, &dstAuthor, &dstType, &dstStatus, &dstMerged); err != nil {
+		Err(w, 400, "target_not_found")
+		return
+	}
+	if dstStatus != "published" {
 		Err(w, 400, "target_not_found")
 		return
 	}

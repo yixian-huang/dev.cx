@@ -194,7 +194,7 @@ export default function MePage() {
           {t('me.myProjects')}
         </Link>
         <Link
-          to="/compose"
+          to="/me/drafts"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-foreground-600 hover:text-foreground-900 bg-background-100 hover:bg-background-200/60 rounded-md transition-colors duration-200 whitespace-nowrap"
         >
           <span className="w-3.5 h-3.5 flex items-center justify-center">

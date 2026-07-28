@@ -58,7 +58,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		{"handle_history", `select old_handle, changed_at from handle_history where user_id=$1 order by changed_at`},
 		{"projects", `select slug, name, tagline, description_md, stage, audience, screenshots,
 			tags, links, created_at, updated_at from projects where owner_id=$1 order by created_at`},
-		{"posts", `select slug, type, title, body_md, feedback_wanted, uncertainties, links,
+		{"posts", `select slug, type, title, body_md, status, feedback_wanted, uncertainties, links,
 			hidden_at, hidden_reason, created_at, updated_at from posts where author_id=$1 order by created_at`},
 		{"replies", `select r.body_md, r.floor, r.created_at, p.slug as post_slug
 			from replies r join posts p on p.id=r.post_id where r.author_id=$1 order by r.created_at`},

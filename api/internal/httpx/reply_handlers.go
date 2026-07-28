@@ -63,10 +63,14 @@ func (s *Server) handleCreateReply(w http.ResponseWriter, r *http.Request) {
 	// "FOR UPDATE is not allowed with aggregate functions"），且顶层回复不存在
 	// 时 for update 也锁不到任何行、起不到互斥作用。posts 行本身总是存在，
 	// 锁它可以让同帖的并发请求真正排队，楼层号聚合查询在锁内单独执行即可。
-	var postID string
+	var postID, postStatus string
 	if err := tx.QueryRow(ctx,
-		`select id from posts where slug=$1 and hidden_at is null for update`,
-		strings.ToLower(r.PathValue("slug"))).Scan(&postID); err != nil {
+		`select id, status from posts where slug=$1 and hidden_at is null for update`,
+		strings.ToLower(r.PathValue("slug"))).Scan(&postID, &postStatus); err != nil {
+		Err(w, 404, "not_found")
+		return
+	}
+	if postStatus != "published" {
 		Err(w, 404, "not_found")
 		return
 	}
@@ -127,10 +131,14 @@ func (s *Server) handleListReplies(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	viewer := currentUserID(r)
 	admin := s.isAdmin(ctx, viewer)
-	var postID string
+	var postID, postStatus, postAuthor string
 	if err := s.deps.Pool.QueryRow(ctx,
-		`select id from posts where slug=$1`,
-		strings.ToLower(r.PathValue("slug"))).Scan(&postID); err != nil {
+		`select id, status, author_id from posts where slug=$1`,
+		strings.ToLower(r.PathValue("slug"))).Scan(&postID, &postStatus, &postAuthor); err != nil {
+		Err(w, 404, "not_found")
+		return
+	}
+	if postStatus == "draft" && viewer != postAuthor && !admin {
 		Err(w, 404, "not_found")
 		return
 	}

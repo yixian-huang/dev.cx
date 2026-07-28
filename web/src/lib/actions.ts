@@ -44,9 +44,23 @@ export async function createPost(
     feedback_wanted?: string[]
     uncertainties?: string[]
     links?: { label: string; url: string }[]
+    /** draft | published；默认 published */
+    status?: 'draft' | 'published'
+    /** 有则 upsert 该草稿（可改为 published 发布） */
+    draft_slug?: string
   },
-): Promise<{ slug: string }> {
-  return (await c.post<{ post: { slug: string } }>('/api/posts', f)).post
+): Promise<{ slug: string; status?: string }> {
+  return (await c.post<{ post: { slug: string; status?: string } }>('/api/posts', f)).post
+}
+
+export async function listMyDrafts(
+  c: ApiClient,
+): Promise<{ posts: Array<Record<string, unknown>>; next_cursor: string | null }> {
+  return c.get('/api/me/drafts')
+}
+
+export async function deleteDraft(c: ApiClient, slug: string): Promise<void> {
+  await c.del(`/api/posts/${encodeURIComponent(slug)}`)
 }
 
 export async function createReply(

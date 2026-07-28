@@ -18,12 +18,13 @@ type projectRow struct {
 
 type postRow struct {
 	ID, Slug, AuthorID, Type, Title, BodyMD string
+	Status                                  string
 	ProjectID                               *string
 	FeedbackWanted, Uncertainties           []string
 	Links                                   []map[string]string
 	MergedInto                              *string
 	MergedAt                                *time.Time
-	CreatedAt                               time.Time
+	CreatedAt, UpdatedAt                    time.Time
 	HiddenAt                                *time.Time
 	HiddenReason                            string
 }
@@ -40,8 +41,11 @@ type replyRow struct {
 const projectCols = `id, slug, owner_id, name, tagline, description_md, stage, audience,
 	screenshots, tags, links, created_at, updated_at`
 
-const postCols = `id, slug, author_id, project_id, type, title, body_md,
-	feedback_wanted, uncertainties, links, merged_into, created_at, merged_at, hidden_at, hidden_reason`
+const postCols = `id, slug, author_id, project_id, type, title, body_md, status,
+	feedback_wanted, uncertainties, links, merged_into, created_at, updated_at, merged_at, hidden_at, hidden_reason`
+
+// publishedOnlySQL 公开列表/计数/时间线共用：仅已发布帖。
+const publishedOnlySQL = `status = 'published'`
 
 const replyCols = `id, post_id, author_id, body_md, parent_id, floor, created_at, hidden_at, hidden_reason`
 
@@ -107,12 +111,15 @@ func scanPost(row pgx.Row) (postRow, error) {
 	var p postRow
 	var raw []byte
 	err := row.Scan(&p.ID, &p.Slug, &p.AuthorID, &p.ProjectID, &p.Type, &p.Title,
-		&p.BodyMD, &p.FeedbackWanted, &p.Uncertainties, &raw, &p.MergedInto, &p.CreatedAt, &p.MergedAt,
-		&p.HiddenAt, &p.HiddenReason)
+		&p.BodyMD, &p.Status, &p.FeedbackWanted, &p.Uncertainties, &raw, &p.MergedInto,
+		&p.CreatedAt, &p.UpdatedAt, &p.MergedAt, &p.HiddenAt, &p.HiddenReason)
 	if err != nil {
 		return p, err
 	}
 	p.Links = decodeLinks(raw)
+	if p.Status == "" {
+		p.Status = "published"
+	}
 	return p, nil
 }
 
@@ -178,7 +185,8 @@ func (s *Server) projectJSON(ctx context.Context, p projectRow, withStats bool, 
 			   count(*) filter (where type in ('show','build')),
 			   count(*) filter (where type in ('ask','discuss')),
 			   count(*) filter (where array_length(feedback_wanted,1) > 0)
-			 from posts where project_id=$1 and merged_into is null and hidden_at is null`, p.ID).
+			 from posts where project_id=$1 and merged_into is null and hidden_at is null
+			   and `+publishedOnlySQL, p.ID).
 			Scan(&timeline, &discuss, &feedback)
 		out["stats"] = map[string]int{
 			"timeline_count": timeline, "discuss_count": discuss, "feedback_count": feedback,
@@ -208,12 +216,17 @@ func (s *Server) projectJSON(ctx context.Context, p projectRow, withStats bool, 
 // 会把已被合并、理应从列表消失的帖子标题重新带回响应体。单帖详情（GET /api/posts/{slug}）
 // 始终需要它，前端据此渲染「重复讨论已合并至此」的提示。
 func (s *Server) postJSON(ctx context.Context, p postRow, withProject, withMergedFrom bool) map[string]any {
+	status := p.Status
+	if status == "" {
+		status = "published"
+	}
 	out := map[string]any{
 		"id": p.ID, "slug": p.Slug, "type": p.Type, "title": p.Title, "body_md": p.BodyMD,
+		"status": status,
 		"feedback_wanted": emptyIfNil(p.FeedbackWanted),
 		"uncertainties":   emptyIfNil(p.Uncertainties),
 		"links":           p.Links, "author": s.authorJSON(ctx, p.AuthorID),
-		"created_at": p.CreatedAt, "merged_into": strOrNil(p.MergedInto),
+		"created_at": p.CreatedAt, "updated_at": p.UpdatedAt, "merged_into": strOrNil(p.MergedInto),
 	}
 	// merged_into_post/merged_at 只在这条帖子确实被合并时才附带:merged_into 本身只是目标帖的
 	// id,没有 GET-by-id 端点,前端渲染"已合并至"横幅需要目标帖的 slug(拼链接)和 title(显示文案)。

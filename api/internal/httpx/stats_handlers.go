@@ -13,6 +13,7 @@ func projectHeatSQL(projectIDExpr string) string {
 		where p_heat.project_id = ` + projectIDExpr + `
 		  and p_heat.merged_into is null
 		  and p_heat.hidden_at is null
+		  and p_heat.status = 'published'
 		  and r.hidden_at is null
 		  and r.created_at > now() - interval '7 days')`
 }
@@ -25,6 +26,7 @@ left join lateral (
 	       (select count(*)::int from replies r where r.post_id = po.id and r.hidden_at is null) as reply_count
 	from posts po
 	where po.project_id = p.id and po.merged_into is null and po.hidden_at is null
+	  and po.status = 'published'
 	order by po.created_at desc
 	limit 1
 ) lp on true`
@@ -38,6 +40,7 @@ func projectListSelect() string {
 	exists(
 		select 1 from posts fp
 		where fp.project_id = p.id and fp.merged_into is null and fp.hidden_at is null
+		  and fp.status = 'published'
 		  and array_length(fp.feedback_wanted, 1) > 0
 		  and fp.created_at > now() - interval '7 days'
 	) as has_feedback_request,
@@ -51,7 +54,8 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		select
 		  (select count(*)::int from users),
 		  (select count(*)::int from projects),
-		  (select count(*)::int from posts where merged_into is null and hidden_at is null)`).
+		  (select count(*)::int from posts where merged_into is null and hidden_at is null
+		     and status = 'published')`).
 		Scan(&builders, &products, &discussions); err != nil {
 		Err(w, 500, "internal")
 		return

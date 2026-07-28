@@ -101,6 +101,7 @@ export function metaForRoute(pathname: string, data: SSRData): PageMeta {
     '/verify-email': `邮箱验证 — ${SITE}`,
     '/reset-password': `重置密码 — ${SITE}`,
     '/admin': `运营台 — ${SITE}`,
+    '/me/drafts': `草稿箱 — ${SITE}`,
   }
   return {
     title: staticTitles[pathname] ?? `${SITE}`,

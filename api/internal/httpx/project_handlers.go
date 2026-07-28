@@ -363,7 +363,8 @@ func (s *Server) handleProjectTimeline(w http.ResponseWriter, r *http.Request) {
 	load := func(types []string) ([]map[string]any, error) {
 		rows, err := s.deps.Pool.Query(ctx,
 			`select `+postCols+` from posts
-			 where project_id=$1 and merged_into is null and hidden_at is null and type = any($2)
+			 where project_id=$1 and merged_into is null and hidden_at is null
+			   and status = 'published' and type = any($2)
 			 order by created_at desc limit 50`, pid, types)
 		if err != nil {
 			return nil, err

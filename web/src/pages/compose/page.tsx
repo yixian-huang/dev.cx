@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import Navbar from '@/components/feature/Navbar';
@@ -10,12 +10,20 @@ import ChapterLabel from '@/components/base/ChapterLabel';
 import { createClient, type ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-errors';
 import { createProject } from '@/lib/actions';
+import type { ApiPost } from '@/lib/adapters/api-types';
 import { deriveSlug } from '@/lib/project-form';
 import QuickProjectForm, { type QuickProjectEntry } from './components/QuickProjectForm';
-import UnifiedEditor, { type PostType } from './components/UnifiedEditor';
+import UnifiedEditor, { type DraftSeed, type PostType } from './components/UnifiedEditor';
 import LockedHeader, { type LockedKind } from './components/LockedHeader';
 import AutoSaveStatus from './components/AutoSaveStatus';
 import SuccessState from './components/SuccessState';
+
+function asPostType(t: string | undefined): PostType {
+  if (t === 'show' || t === 'build' || t === 'discuss' || t === 'ask') {
+    return t === 'ask' ? 'discuss' : t;
+  }
+  return 'show';
+}
 
 export default function ComposePage() {
   const { t } = useTranslation();
@@ -27,6 +35,7 @@ export default function ComposePage() {
   const lockedParam = searchParams.get('locked');
   const typeParam = searchParams.get('type') as PostType | null;
   const projectParam = searchParams.get('project');
+  const draftParam = (searchParams.get('draft') ?? '').trim();
 
   const validType = typeParam === 'show' || typeParam === 'build' || typeParam === 'discuss';
   // C3 修复:锁定不再只认 discuss——项目页三个入口(提交反馈=discuss、写进度=build、
@@ -41,7 +50,9 @@ export default function ComposePage() {
   const [publishedSlug, setPublishedSlug] = useState('');
   const [editorEpoch, setEditorEpoch] = useState(0);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draftSeed, setDraftSeed] = useState<DraftSeed | null>(null);
+  const [draftLoadError, setDraftLoadError] = useState<string | undefined>(undefined);
+  const [draftLoading, setDraftLoading] = useState(Boolean(draftParam && isLoggedIn));
 
   const [quickCreated, setQuickCreated] = useState(false);
   const [quickProjectSlug, setQuickProjectSlug] = useState('');
@@ -50,21 +61,67 @@ export default function ComposePage() {
   // 失败时表单内容不清空(QuickProjectForm 自己持有输入状态,失败不卸载它就自然保留)。
   const [quickError, setQuickError] = useState<string | undefined>(undefined);
 
+  // 加载 ?draft= 预填
+  useEffect(() => {
+    if (!draftParam || !isLoggedIn) {
+      setDraftLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDraftLoading(true);
+    setDraftLoadError(undefined);
+    (async () => {
+      try {
+        const client = createClient({ baseURL: '' });
+        const { post } = await client.get<{ post: ApiPost }>(`/api/posts/${encodeURIComponent(draftParam)}`);
+        if (cancelled) return;
+        if (post.status && post.status !== 'draft') {
+          setDraftLoadError(t('compose.draftNotEditable'));
+          setDraftLoading(false);
+          return;
+        }
+        setDraftSeed({
+          slug: post.slug,
+          type: asPostType(post.type),
+          title: post.title ?? '',
+          body_md: post.body_md ?? '',
+          project_slug: post.project?.slug,
+          feedback_wanted: post.feedback_wanted ?? [],
+        });
+        setEditorEpoch((n) => n + 1);
+      } catch (err) {
+        if (cancelled) return;
+        const e = err as ApiError;
+        if (e.status === 401) {
+          navigate('/login');
+          return;
+        }
+        setDraftLoadError(apiErrorMessage(e));
+      } finally {
+        if (!cancelled) setDraftLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [draftParam, isLoggedIn, navigate, t]);
+
   const handlePublished = useCallback((slug: string) => {
     setPublishedSlug(slug);
     setLastSaved(null);
+    setDraftSeed(null);
   }, []);
 
-  const handleSaveDraft = useCallback(() => {
-    setLastSaved(new Date());
+  const handleDraftSaved = useCallback((_slug: string, at: Date) => {
+    setLastSaved(at);
   }, []);
 
   const handleNewPost = useCallback(() => {
     setPublishedSlug('');
     setLastSaved(null);
+    setDraftSeed(null);
     // 重挂载编辑器,让下一篇从干净状态开始。
     setEditorEpoch((n) => n + 1);
-  }, []);
+    navigate('/compose', { replace: true });
+  }, [navigate]);
 
   // 跟 new-project/page.tsx 同一条写路径:actions.createProject,成功用接口返回的真实
   // slug 导航,失败按写路径约定内联展示错误、401 转登录。链接按 new-project 的约定过滤:
@@ -103,23 +160,6 @@ export default function ComposePage() {
   const handleQuickCancel = useCallback(() => {
     navigate('/me');
   }, [navigate]);
-
-  const triggerAutoSave = useCallback(() => {
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-    autoSaveTimerRef.current = setTimeout(() => {
-      setLastSaved(new Date());
-    }, 3000);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, []);
 
   /* ── Quick project mode ── */
   if (quickMode) {
@@ -234,6 +274,10 @@ export default function ComposePage() {
             />
           ) : publishedSlug ? (
             <SuccessState slug={publishedSlug} onNewPost={handleNewPost} />
+          ) : draftLoading ? (
+            <p className="py-16 text-[13px] text-foreground-400 text-center">{t('compose.loadingDraft')}</p>
+          ) : draftLoadError ? (
+            <p className="py-16 text-[13px] text-primary-700 text-center">{draftLoadError}</p>
           ) : (
             <>
               {isLocked && (
@@ -243,12 +287,12 @@ export default function ComposePage() {
               <div className="pb-6">
                 <UnifiedEditor
                   key={editorEpoch}
-                  initialType={initialType}
+                  initialType={draftSeed?.type ?? initialType}
                   locked={isLocked}
                   lockedProjectId={lockedProjectId}
+                  seed={draftSeed}
                   onPublished={handlePublished}
-                  onSaveDraft={handleSaveDraft}
-                  onAutoSaveTrigger={triggerAutoSave}
+                  onDraftSaved={handleDraftSaved}
                 />
               </div>
 

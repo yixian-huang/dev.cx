@@ -61,6 +61,7 @@ func AssembleHighlights(ctx context.Context, q db.Querier, year, week int) ([]Hi
 		join users u on u.id = po.author_id
 		where po.merged_into is null
 		  and po.hidden_at is null
+		  and po.status = 'published'
 		  and extract(isoyear from po.created_at)::int = $1
 		  and extract(week from po.created_at)::int = $2
 		order by reply_count desc, po.created_at desc

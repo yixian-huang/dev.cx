@@ -15,6 +15,7 @@ import MePage from "../pages/me/page";
 import MyProjectsPage from "../pages/me/projects/page";
 import StatusPage from "../pages/me/status/page";
 import EditProfilePage from "../pages/me/profile/page";
+import MyDraftsPage from "../pages/me/drafts/page";
 import WeeklyPage from "../pages/weekly/page";
 import ProjectSettingsPage from "../pages/project/settings/page";
 import NewProjectPage from "../pages/new-project/page";
@@ -102,6 +103,10 @@ const routes: RouteObject[] = [
   {
     path: "/me/status",
     element: <StatusPage />,
+  },
+  {
+    path: "/me/drafts",
+    element: <MyDraftsPage />,
   },
   {
     path: "/me/profile",

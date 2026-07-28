@@ -14,11 +14,13 @@ export type ApiPost = {
   type: 'show' | 'build' | 'ask' | 'discuss';
   title: string;
   body_md: string;
+  status?: 'draft' | 'published';
   feedback_wanted: string[];
   uncertainties: string[];
   links: { label?: string; url?: string }[];
   author: ApiAuthor;
   created_at: string;
+  updated_at?: string;
   merged_into: string | null;
   reply_count?: number;
   project?: { slug: string; name: string } | null;
