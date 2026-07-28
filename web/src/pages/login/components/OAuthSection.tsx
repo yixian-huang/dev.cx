@@ -18,7 +18,13 @@ export default function OAuthSection({ loading, onOAuth }: OAuthSectionProps) {
         {t('login.oauthHint')}
       </p>
       <div className="flex gap-3">
-        <button type="button" onClick={() => onOAuth('github')} disabled={loading} className={oauthBtnCls}>
+        <button
+          type="button"
+          onClick={() => onOAuth('github')}
+          disabled={loading}
+          className={oauthBtnCls}
+          aria-label={t('login.oauthGitHubAria')}
+        >
           <span className="w-4 h-4 flex items-center justify-center" aria-hidden>
             <i className="ri-github-fill text-base" />
           </span>
@@ -26,17 +32,26 @@ export default function OAuthSection({ loading, onOAuth }: OAuthSectionProps) {
         </button>
         <button
           type="button"
-          onClick={() => onOAuth('google')}
           disabled
+          aria-disabled="true"
+          aria-label={t('login.oauthGoogleAria')}
           title={t('login.oauthComingSoon')}
-          className={oauthBtnCls}
+          className={`${oauthBtnCls} relative`}
         >
           <span className="w-4 h-4 flex items-center justify-center" aria-hidden>
             <i className="ri-google-fill text-base" />
           </span>
-          Google
+          <span className="flex flex-col items-start leading-tight text-left">
+            <span>Google</span>
+            <span className="text-[10px] font-normal text-foreground-400 tracking-normal normal-case">
+              {t('login.oauthComingSoon')}
+            </span>
+          </span>
         </button>
       </div>
+      <p className="mt-3 text-center text-[12px] text-foreground-400 leading-relaxed">
+        {t('login.oauthFootnote')}
+      </p>
     </div>
   );
 }

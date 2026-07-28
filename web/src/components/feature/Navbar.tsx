@@ -11,6 +11,8 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchHint, setSearchHint] = useState('');
+  /** empty | soon —— soon 时展示「去探索」链 */
+  const [searchHintKind, setSearchHintKind] = useState<'empty' | 'soon' | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -102,6 +104,7 @@ export default function Navbar() {
         searchRef.current.blur();
       }
       setSearchHint('');
+      setSearchHintKind(null);
       setSearchOpen(false);
       return;
     }
@@ -110,18 +113,29 @@ export default function Navbar() {
     const q = (searchRef.current?.value ?? '').trim();
     if (!q) {
       setSearchHint(t('nav.searchEmpty'));
+      setSearchHintKind('empty');
       return;
     }
-    // 暂无全局搜索 API:仅闭环「像 handle 的查询」→ 档案页;其余诚实提示。
+    // 暂无全局搜索 API:
+    // 1) @handle / handle → 档案
+    // 2) 像产品 slug 的串 → 尝试 /p/:slug(不存在则产品页自带 404 空态)
+    // 3) 其它 → 诚实提示全文搜索未上线
     const handleLike = q.replace(/^@/, '');
     if (/^[a-zA-Z0-9_][a-zA-Z0-9_-]{1,31}$/.test(handleLike)) {
       setSearchHint('');
+      setSearchHintKind(null);
       setSearchOpen(false);
       if (searchRef.current) searchRef.current.value = '';
-      navigate(`/@${handleLike}`);
+      // 以 @ 开头或不含连字符时优先档案;含连字符更像产品 slug(dev-cx / img-li)
+      if (q.startsWith('@') || !handleLike.includes('-')) {
+        navigate(`/@${handleLike}`);
+      } else {
+        navigate(`/p/${handleLike}`);
+      }
       return;
     }
     setSearchHint(t('nav.searchSoon'));
+    setSearchHintKind('soon');
   }, [navigate, t]);
 
   const navLinkClass = (path: string) => {
@@ -171,16 +185,32 @@ export default function Navbar() {
                   type="text"
                   placeholder={t('nav.searchPlaceholder')}
                   onKeyDown={handleSearchKeyDown}
-                  onChange={() => setSearchHint('')}
+                  onChange={() => {
+                    setSearchHint('');
+                    setSearchHintKind(null);
+                  }}
                   className="w-44 text-sm bg-background-100 text-foreground-900 placeholder:text-foreground-300 px-3 py-1.5 rounded-xs outline-none transition-all duration-200"
                 />
                 {searchHint && (
-                  <p
+                  <div
                     role="status"
-                    className="absolute top-full right-0 mt-1.5 w-56 px-2.5 py-1.5 text-[11px] leading-snug text-foreground-700 bg-background-50 border border-foreground-200/50 rounded-xs shadow-sm z-50"
+                    className="absolute top-full right-0 mt-1.5 w-60 px-2.5 py-2 text-[11px] leading-snug text-foreground-700 bg-background-50 border border-foreground-200/50 rounded-xs shadow-sm z-50"
                   >
-                    {searchHint}
-                  </p>
+                    <p>{searchHint}</p>
+                    {searchHintKind === 'soon' && (
+                      <Link
+                        to="/explore"
+                        className="inline-block mt-1.5 text-primary-600 hover:text-primary-700 underline-offset-2 hover:underline"
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setSearchHint('');
+                          setSearchHintKind(null);
+                        }}
+                      >
+                        {t('nav.searchGoExplore')} →
+                      </Link>
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
@@ -188,6 +218,7 @@ export default function Navbar() {
                 onClick={() => {
                   setSearchOpen(true);
                   setSearchHint('');
+                  setSearchHintKind(null);
                 }}
                 className="w-8 h-8 flex items-center justify-center text-foreground-500 hover:text-foreground-800 transition-colors duration-200 cursor-pointer bg-transparent border-none p-0"
                 aria-label={t('nav.search')}
