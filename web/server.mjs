@@ -1,4 +1,5 @@
-import { createServer as createHttpServer } from 'node:http'
+import { createServer as createHttpServer, request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
@@ -8,6 +9,48 @@ const PORT = Number(process.env.PORT || 5173)
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:8787'
 const SITE_ORIGIN = process.env.SITE_ORIGIN || `http://localhost:${PORT}`
 const isProd = process.env.NODE_ENV === 'production'
+
+// 浏览器同源 /api/* → 后端 API。生产通常由 nginx 分流;本地 SSR(dev:ssr)与直连 web
+// 容器时必须在此转发,否则 fetch('/api/...') 会落到 SSR 拿到 HTML,注册/发帖全线假失败。
+function proxyToApi(req, res) {
+  let target
+  try {
+    target = new URL(req.url || '/', API_BASE)
+  } catch {
+    res.statusCode = 502
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ error: 'bad_gateway' }))
+    return
+  }
+  const headers = { ...req.headers, host: target.host }
+  // 避免上游按压缩体原样回写导致解码错乱;让 Node 走身份传输即可
+  delete headers['accept-encoding']
+  const lib = target.protocol === 'https:' ? httpsRequest : httpRequest
+  const upstream = lib(
+    target,
+    { method: req.method, headers, timeout: 60_000 },
+    (upRes) => {
+      res.writeHead(upRes.statusCode || 502, upRes.headers)
+      upRes.pipe(res)
+    },
+  )
+  upstream.on('timeout', () => {
+    upstream.destroy()
+    if (!res.headersSent) {
+      res.statusCode = 504
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ error: 'gateway_timeout' }))
+    }
+  })
+  upstream.on('error', () => {
+    if (!res.headersSent) {
+      res.statusCode = 502
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ error: 'bad_gateway' }))
+    }
+  })
+  req.pipe(upstream)
+}
 
 // 生产态在 main() 里一次性加载，供 handleSSR 复用；dev 态 vite 同理。
 let vite = null
@@ -352,6 +395,16 @@ async function main() {
     if (url.pathname === '/healthz-ssr') {
       res.setHeader('content-type', 'application/json')
       res.end('{"ok":true}')
+      return
+    }
+
+    // 同源 API 转发(须在 SSR/静态之前)
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+      proxyToApi(req, res)
+      return
+    }
+    if (url.pathname === '/healthz') {
+      proxyToApi(req, res)
       return
     }
 

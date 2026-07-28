@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -103,7 +104,9 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	auth.SetSessionCookie(w, token, s.deps.Cfg.Env == "prod")
-	s.issueEmailVerification(ctx, uid)
+	// 发验证邮件放到后台:SMTP 慢/卡时不能拖住注册响应——否则浏览器会等到超时,
+	// 前端只剩「出错了,请稍后重试」,用户却不知道账号其实已建好。
+	go s.issueEmailVerification(context.Background(), uid)
 	s.writeUserByID(w, r, uid, http.StatusCreated, true)
 }
 

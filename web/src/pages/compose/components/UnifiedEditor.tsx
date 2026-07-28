@@ -329,7 +329,7 @@ export default function UnifiedEditor({
                 <div className="px-3 py-2.5 space-y-1.5">
                   <p className="text-xs text-foreground-400">{t('compose.noProjectsYet')}</p>
                   <Link
-                    to="/new"
+                    to="/new-project"
                     className="block text-[13px] text-primary-600 hover:text-primary-500"
                     onClick={() => setProjectOpen(false)}
                   >
@@ -358,7 +358,7 @@ export default function UnifiedEditor({
       {needsProject && myProjects.length === 0 && (
         <div className="mt-4 px-3.5 py-3 bg-background-100 border border-foreground-200/40 rounded-xs text-[13px] text-foreground-700 leading-relaxed">
           {t('compose.noProjectsYet')}{' '}
-          <Link to="/new" className="text-primary-600 hover:text-primary-500 underline-offset-2 hover:underline">
+          <Link to="/new-project" className="text-primary-600 hover:text-primary-500 underline-offset-2 hover:underline">
             {t('compose.createProjectFirst')}
           </Link>
         </div>
@@ -444,7 +444,7 @@ export default function UnifiedEditor({
           {publishError === t('compose.needProjectCreateFirst') && (
             <>
               {' '}
-              <Link to="/new" className="underline underline-offset-2 hover:text-primary-600">
+              <Link to="/new-project" className="underline underline-offset-2 hover:text-primary-600">
                 {t('compose.createProjectFirst')}
               </Link>
             </>
