@@ -34,6 +34,11 @@ export default function OnboardingPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!canSubmit || submitting) return;
+    // 与 API 对齐：密码不足 8 位时本地先提示，避免只看到模糊 bad_input
+    if (password.length < 8) {
+      setError(apiErrorMessage({ status: 400, code: 'password_too_short' }));
+      return;
+    }
     setError('');
     setSubmitting(true);
     try {
@@ -108,10 +113,12 @@ export default function OnboardingPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={t('login.passwordPlaceholder')}
+                placeholder={t('login.passwordPlaceholderRegister')}
                 autoComplete="new-password"
+                minLength={8}
                 className={inputClass}
               />
+              <p className="text-[12px] text-foreground-400">{t('login.passwordHint')}</p>
             </div>
 
             <div className="space-y-2">

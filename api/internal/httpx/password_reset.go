@@ -77,8 +77,12 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Token = strings.TrimSpace(in.Token)
-	if in.Token == "" || len(in.Password) < 8 {
+	if in.Token == "" {
 		Err(w, 400, "bad_input")
+		return
+	}
+	if len(in.Password) < 8 {
+		Err(w, 400, "password_too_short")
 		return
 	}
 	ctx := r.Context()

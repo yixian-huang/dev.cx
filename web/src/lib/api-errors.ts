@@ -19,19 +19,22 @@ const MESSAGES: Record<string, string> = {
   github_already_linked: '该 GitHub 账号已绑定其他用户',
 
   // 注册/邀请
-  invite_invalid: '邀请码无效',
+  invite_invalid: '邀请码无效或已用完',
   invite_used: '邀请码已被使用',
   email_taken: '该邮箱已被注册',
+  email_required: '请填写邮箱',
+  password_too_short: '密码至少需要 8 个字符',
+  display_name_required: '请填写显示名',
 
   // handle
   handle_taken: '该 handle 已被占用',
-  handle_reserved: '该 handle 是保留字,换一个吧',
-  handle_invalid: 'handle 格式不对',
-  rename_too_soon: '改名太频繁,请稍后再试',
+  handle_reserved: '该 handle 是保留字，换一个吧',
+  handle_invalid: 'handle 需 2–32 位：小写字母/数字/中划线，首尾为字母或数字',
+  rename_too_soon: '改名太频繁，请稍后再试',
 
   // 通用输入校验
   bad_json: '请求格式有误',
-  bad_input: '内容不符合要求',
+  bad_input: '请检查填写是否完整（密码至少 8 位）',
   too_long: '内容太长了',
   too_many: '数量超出限制',
   not_found: '未找到',

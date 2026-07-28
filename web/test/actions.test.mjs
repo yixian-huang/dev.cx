@@ -60,6 +60,9 @@ test('updateProfile PATCHes only provided fields', async () => {
 test('apiErrorMessage maps known codes and falls back generically', async () => {
   const { apiErrorMessage } = await load('/src/lib/api-errors.ts')
   assert.match(apiErrorMessage({ status: 400, code: 'handle_taken' }), /占用/)
+  assert.match(apiErrorMessage({ status: 400, code: 'password_too_short' }), /8/)
+  assert.match(apiErrorMessage({ status: 400, code: 'email_required' }), /邮箱/)
+  assert.match(apiErrorMessage({ status: 400, code: 'display_name_required' }), /显示名/)
   assert.match(apiErrorMessage({ status: 500, code: 'whatever' }), /稍后/)
 })
 

@@ -35,8 +35,17 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.Handle = strings.ToLower(strings.TrimSpace(req.Handle))
 	req.DisplayName = strings.TrimSpace(req.DisplayName)
-	if req.Email == "" || len(req.Password) < 8 || req.DisplayName == "" {
-		Err(w, 400, "bad_input")
+	// 分码返回，便于前端给出明确文案（旧版统一 bad_input 看不出是密码还是邮箱）
+	if req.Email == "" {
+		Err(w, 400, "email_required")
+		return
+	}
+	if len(req.Password) < 8 {
+		Err(w, 400, "password_too_short")
+		return
+	}
+	if req.DisplayName == "" {
+		Err(w, 400, "display_name_required")
 		return
 	}
 	if utf8.RuneCountInString(req.DisplayName) > maxDisplayNameLen {

@@ -612,6 +612,8 @@ const common: Record<string, string> = {
   "login.emailPlaceholder": "your@email.com",
   "login.password": "密码",
   "login.passwordPlaceholder": "输入密码",
+  "login.passwordPlaceholderRegister": "至少 8 个字符",
+  "login.passwordHint": "密码至少 8 个字符",
   "login.confirmPassword": "确认密码",
   "login.confirmPasswordPlaceholder": "再次输入密码",
   "login.newPassword": "新密码",

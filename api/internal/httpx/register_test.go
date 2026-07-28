@@ -43,6 +43,9 @@ func TestRegister(t *testing.T) {
 	}{
 		{`{"invite_code":"bad","email":"x@dev.cx","password":"pw123456","handle":"xx1","display_name":"X"}`, "invite_invalid", 400},
 		{`{"invite_code":"` + codes[0] + `","email":"y@dev.cx","password":"pw123456","handle":"yy1","display_name":"Y"}`, "invite_invalid", 400}, // 已核销
+		{`{"invite_code":"any","email":"short@dev.cx","password":"czh1994","handle":"shortpw","display_name":"S"}`, "password_too_short", 400},
+		{`{"invite_code":"any","email":"","password":"pw123456","handle":"noemail","display_name":"N"}`, "email_required", 400},
+		{`{"invite_code":"any","email":"noname@dev.cx","password":"pw123456","handle":"nondn","display_name":""}`, "display_name_required", 400},
 	}
 	for _, c := range cases {
 		rec := postJSON(t, srv, "/api/auth/register", c.body)
