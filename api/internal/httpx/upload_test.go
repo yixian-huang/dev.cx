@@ -20,18 +20,22 @@ import (
 	"devcx/internal/testutil"
 )
 
-// fakeImgli 起一个假 img.li:校验 Bearer 与 multipart,按 script 回应。
+// fakeImgli 起一个假 img.li:校验 Bearer；upload 校 multipart；delete 校 path。
 func fakeImgli(t *testing.T, wantToken string, status int, body string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/upload" {
-			t.Errorf("path = %s", r.URL.Path)
-		}
 		if got := r.Header.Get("Authorization"); got != "Bearer "+wantToken {
 			t.Errorf("auth header = %q", got)
 		}
-		if _, _, err := r.FormFile("file"); err != nil {
-			t.Errorf("no file field: %v", err)
+		switch {
+		case r.Method == "POST" && r.URL.Path == "/api/v1/upload":
+			if _, _, err := r.FormFile("file"); err != nil {
+				t.Errorf("no file field: %v", err)
+			}
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/api/v1/images/"):
+			// ok
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
@@ -127,10 +131,91 @@ func TestUploadProxy(t *testing.T) {
 	}
 	var m map[string]string
 	json.NewDecoder(res.Body).Decode(&m)
-	if m["url"] != "https://img.li/i/k1.png" || m["thumbnail_url"] != "https://img.li/t/k1.jpg" {
+	if m["url"] != "https://img.li/i/k1.png" || m["thumbnail_url"] != "https://img.li/t/k1.jpg" || m["key"] != "k1" {
 		t.Fatalf("body = %v", m)
 	}
 }
+
+func TestDeleteUploadByKey(t *testing.T) {
+	img := fakeImgli(t, "bl_test", 200,
+		`{"status":true,"message":"ok","data":{"key":"k1","deleted":true}}`)
+	defer img.Close()
+	_, base := newTestServerWithImgli(t, "bl_test", img.URL)
+	cookie := registerAndLogin(t, base, "deluser")
+
+	req, _ := http.NewRequest("DELETE", base+"/api/upload",
+		strings.NewReader(`{"key":"k1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", cookie)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status = %d body=%s", res.StatusCode, b)
+	}
+	var m map[string]any
+	json.NewDecoder(res.Body).Decode(&m)
+	if m["deleted"] != true || m["key"] != "k1" {
+		t.Fatalf("body = %v", m)
+	}
+}
+
+func TestDeleteUploadByURL(t *testing.T) {
+	// fake base host will be 127.0.0.1:port — build url from img.URL
+	var gotPath string
+	img := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if r.Method != "DELETE" {
+			t.Errorf("method %s", r.Method)
+		}
+		if r.Header.Get("Authorization") != "Bearer bl_test" {
+			t.Errorf("auth %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"status":true,"data":{"key":"abc123","deleted":true}}`)
+	}))
+	defer img.Close()
+	_, base := newTestServerWithImgli(t, "bl_test", img.URL)
+	cookie := registerAndLogin(t, base, "delurl")
+	// URL host must match IMGLIBase host
+	fileURL := img.URL + "/i/abc123.png"
+	req, _ := http.NewRequest("DELETE", base+"/api/upload",
+		strings.NewReader(`{"url":"`+fileURL+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", cookie)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("status = %d body=%s", res.StatusCode, b)
+	}
+	if gotPath != "/api/v1/images/abc123" {
+		t.Fatalf("imgli path = %s", gotPath)
+	}
+}
+
+func TestDeleteUploadRejectsForeignURL(t *testing.T) {
+	img := fakeImgli(t, "bl_test", 200, `{"status":true,"data":{"deleted":true}}`)
+	defer img.Close()
+	_, base := newTestServerWithImgli(t, "bl_test", img.URL)
+	cookie := registerAndLogin(t, base, "delforeign")
+	req, _ := http.NewRequest("DELETE", base+"/api/upload",
+		strings.NewReader(`{"url":"https://evil.example/i/k1.png"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", cookie)
+	res, _ := http.DefaultClient.Do(req)
+	defer res.Body.Close()
+	if res.StatusCode != 400 {
+		t.Fatalf("status = %d want 400", res.StatusCode)
+	}
+}
+
 
 func TestUploadRequiresAuth(t *testing.T) {
 	img := fakeImgli(t, "bl_test", 200, `{"status":true,"data":{}}`)

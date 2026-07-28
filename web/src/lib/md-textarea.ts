@@ -217,6 +217,48 @@ export function insertImageMarkdown(snap: TextSnapshot, url: string, alt = ''): 
   return insertAtCursor(snap, `${needNl ? '\n' : ''}${md}\n`)
 }
 
+/** Match markdown image ![alt](url) — first group alt, second url. */
+const MD_IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g
+
+/**
+ * Find image markdown covering the caret / selection.
+ * Returns match range + url when cursor is inside an image token or selection is exactly one.
+ */
+export function findImageAtSelection(snap: TextSnapshot): {
+  start: number
+  end: number
+  alt: string
+  url: string
+} | null {
+  const { value, start, end } = snap
+  MD_IMAGE_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = MD_IMAGE_RE.exec(value)) !== null) {
+    const s = m.index
+    const e = s + m[0].length
+    // caret inside, or selection overlaps / equals
+    if ((start >= s && start <= e) || (end > s && end <= e) || (start <= s && end >= e)) {
+      return { start: s, end: e, alt: m[1] ?? '', url: m[2] ?? '' }
+    }
+  }
+  return null
+}
+
+/** Remove image markdown at selection; returns null if none. */
+export function removeImageAtSelection(snap: TextSnapshot): TextSnapshot | null {
+  const hit = findImageAtSelection(snap)
+  if (!hit) return null
+  // trim one surrounding newline if we leave a blank line pair
+  let { start, end } = hit
+  if (start > 0 && snap.value[start - 1] === '\n') start -= 1
+  if (end < snap.value.length && snap.value[end] === '\n') end += 1
+  return {
+    value: snap.value.slice(0, start) + snap.value.slice(end),
+    start,
+    end: start,
+  }
+}
+
 /** Heuristic active formats for toolbar highlight. */
 export function detectActiveFormats(snap: TextSnapshot): Partial<Record<FormatKey, boolean>> {
   const { value, start, end } = snap

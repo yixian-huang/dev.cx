@@ -3,6 +3,7 @@ import { uploadImage } from '@/lib/actions';
 import { apiErrorMessage, type ApiErrorLike } from '@/lib/api-errors';
 
 export interface ImageUploadResult {
+  key?: string;
   url: string;
   thumbnail_url: string;
 }

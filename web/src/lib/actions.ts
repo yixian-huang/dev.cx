@@ -136,7 +136,7 @@ export async function renameHandle(c: ApiClient, handle: string): Promise<void> 
 export async function uploadImage(
   baseFetch: (path: string, init?: RequestInit) => Promise<Response>,
   file: File,
-): Promise<{ url: string; thumbnail_url: string }> {
+): Promise<{ key: string; url: string; thumbnail_url: string }> {
   const formData = new FormData()
   formData.append('file', file)
   const res = await baseFetch('/api/upload', { method: 'POST', body: formData, credentials: 'include' })
@@ -157,7 +157,38 @@ export async function uploadImage(
     e.code = code
     throw e
   }
-  return parsed as { url: string; thumbnail_url: string }
+  return parsed as { key: string; url: string; thumbnail_url: string }
+}
+
+/** 软删 img.li 图（进回收站）。key 或完整 url 二选一。 */
+export async function deleteImage(
+  baseFetch: (path: string, init?: RequestInit) => Promise<Response>,
+  arg: { key: string } | { url: string },
+): Promise<{ key: string; deleted: boolean }> {
+  const res = await baseFetch('/api/upload', {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify(arg),
+  })
+  const text = await res.text()
+  let parsed: unknown = null
+  try {
+    parsed = text ? JSON.parse(text) : null
+  } catch {
+    parsed = null
+  }
+  if (!res.ok) {
+    const code =
+      parsed && typeof parsed === 'object' && 'error' in parsed
+        ? String((parsed as { error: unknown }).error)
+        : 'unknown'
+    const e = new Error(`api ${res.status} ${code}`) as Error & { status: number; code: string }
+    e.status = res.status
+    e.code = code
+    throw e
+  }
+  return parsed as { key: string; deleted: boolean }
 }
 
 // 关注(B2-T2 端点):kind=user|project,id=handle|slug。幂等,204 无 body。

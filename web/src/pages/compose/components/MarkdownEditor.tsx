@@ -2,13 +2,15 @@ import { useState, useCallback, useRef, useEffect, type ClipboardEvent, type Key
 import Markdown from '@/components/base/Markdown';
 import EditorToolbar, { toolbarRunWrap } from '@/components/base/EditorToolbar';
 import ImageUpload, { type ImageUploadResult } from '@/components/feature/ImageUpload';
-import { uploadImage } from '@/lib/actions';
+import { deleteImage, uploadImage } from '@/lib/actions';
 import {
   applyToTextarea,
+  findImageAtSelection,
   indentSelection,
   insertImageMarkdown,
   insertLink,
   mdStats,
+  removeImageAtSelection,
   snapshotOf,
 } from '@/lib/md-textarea';
 
@@ -30,6 +32,8 @@ export default function MarkdownEditor({
   const [mode, setMode] = useState<EditorMode>('write');
   const [selectionTick, setSelectionTick] = useState(0);
   const [pasteStatus, setPasteStatus] = useState<string | undefined>();
+  const [imageAtCursor, setImageAtCursor] = useState(false);
+  const [deletingImage, setDeletingImage] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +49,10 @@ export default function MarkdownEditor({
 
   const bumpSelection = useCallback(() => {
     setSelectionTick((n) => n + 1);
+    const el = textareaRef.current;
+    if (el) {
+      setImageAtCursor(Boolean(findImageAtSelection(snapshotOf(el))));
+    }
   }, []);
 
   /* ── Sync scroll in split mode ── */
@@ -146,6 +154,35 @@ export default function MarkdownEditor({
     [insertImageAtCursor],
   );
 
+  /** 删除光标处 Markdown 图片，并软删 img.li（失败仍移除正文，避免卡死）。 */
+  const handleDeleteImageAtCursor = useCallback(async () => {
+    const el = textareaRef.current;
+    if (!el || deletingImage) return;
+    const snap = snapshotOf(el);
+    const hit = findImageAtSelection(snap);
+    if (!hit) return;
+    setDeletingImage(true);
+    setPasteStatus('删除图床…');
+    let remoteFailed = false;
+    try {
+      await deleteImage(fetch, { url: hit.url });
+    } catch {
+      // 图床删失败仍允许去掉正文引用（外链或 token 无 full scope）
+      remoteFailed = true;
+    }
+    const next = removeImageAtSelection(snap);
+    if (next) applyToTextarea(el, next);
+    setImageAtCursor(false);
+    if (remoteFailed) {
+      setPasteStatus('图床删除失败，已从正文移除');
+      setTimeout(() => setPasteStatus(undefined), 2500);
+    } else {
+      setPasteStatus(undefined);
+    }
+    setDeletingImage(false);
+    bumpSelection();
+  }, [deletingImage, bumpSelection]);
+
   const modes: { key: EditorMode; label: string; icon: string }[] = [
     { key: 'write', label: '编辑', icon: 'ri-edit-line' },
     { key: 'preview', label: '预览', icon: 'ri-eye-line' },
@@ -162,6 +199,19 @@ export default function MarkdownEditor({
       >
         <i className="ri-image-add-line text-[15px]"></i>
       </ImageUpload>
+      {imageAtCursor && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void handleDeleteImageAtCursor()}
+          disabled={deletingImage}
+          title="从正文移除并删除图床文件"
+          aria-label="删除图片"
+          className="w-7 h-7 flex items-center justify-center rounded-xs text-accent-600 hover:bg-accent-100 transition-colors duration-150 cursor-pointer disabled:opacity-50"
+        >
+          <i className="ri-delete-bin-line text-[15px]"></i>
+        </button>
+      )}
     </div>
   );
 

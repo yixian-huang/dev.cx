@@ -63,6 +63,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/posts/{slug}/merge", s.handleMergePost)
 	s.mux.HandleFunc("DELETE /api/posts/{slug}/merge", s.handleUnmergePost)
 	s.mux.HandleFunc("POST /api/upload", s.handleUpload)
+	s.mux.HandleFunc("DELETE /api/upload", s.handleDeleteUpload)
 	s.mux.HandleFunc("PUT /api/follows/{kind}/{id}", s.handleFollow)
 	s.mux.HandleFunc("DELETE /api/follows/{kind}/{id}", s.handleUnfollow)
 	s.mux.HandleFunc("GET /api/notifications", s.handleListNotifications)
