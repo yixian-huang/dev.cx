@@ -1,0 +1,67 @@
+# Blue-green *side* stack: api + web only (no second postgres).
+#
+# Shares the primary stack's Postgres via host port 5432
+# (see compose.production.yml → 127.0.0.1:5432).
+#
+# Typical use (driven by deploy/release.sh --mode bluegreen):
+#
+#   export POSTGRES_PASSWORD=...
+#   export API_HOST_PORT=8121 WEB_HOST_PORT=3121
+#   docker compose -p devcx-green \
+#     -f deploy/compose.bluegreen.yml \
+#     --env-file deploy/.env \
+#     up -d --build
+#
+# Primary (active) stays on 8120/3120 until nginx is flipped, then old
+# app containers are stopped. Postgres always lives in the primary project.
+
+name: devcx-green
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      ADDR: ":8787"
+      # Reach primary postgres published on the host (not the compose service name).
+      DATABASE_URL: postgres://devcx:${POSTGRES_PASSWORD}@host.docker.internal:5432/devcx?sslmode=disable
+      APP_ENV: prod
+      ALLOW_ORIGIN: https://dev.cx
+      BASE_URL: https://dev.cx
+      TRUSTED_PROXIES: "172.16.0.0/12"
+      IMGLI_TOKEN: ${IMGLI_TOKEN:-}
+      IMGLI_BASE: ${IMGLI_BASE:-https://img.li}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8121}:8787"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      API_BASE: http://api:8787
+      SITE_ORIGIN: https://dev.cx
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-3121}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz-ssr"]
+      interval: 5s
+      timeout: 3s
+      retries: 8
+      start_period: 15s
+    restart: unless-stopped

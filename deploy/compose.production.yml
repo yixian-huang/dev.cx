@@ -9,6 +9,10 @@ services:
       POSTGRES_DB: devcx
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Host-only publish: blue-green side stack + offline dumps connect via
+    # host.docker.internal / 127.0.0.1. Not exposed on public interfaces.
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U devcx -d devcx"]
       interval: 5s
@@ -30,10 +34,16 @@ services:
       IMGLI_TOKEN: ${IMGLI_TOKEN:-}
       IMGLI_BASE: ${IMGLI_BASE:-https://img.li}
     ports:
-      - "127.0.0.1:8120:8787"
+      - "127.0.0.1:${API_HOST_PORT:-8120}:8787"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
     restart: unless-stopped
 
   web:
@@ -46,10 +56,20 @@ services:
       API_BASE: http://api:8787
       SITE_ORIGIN: https://dev.cx
     ports:
-      - "127.0.0.1:3120:3000"
+      - "127.0.0.1:${WEB_HOST_PORT:-3120}:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz-ssr"]
+      interval: 5s
+      timeout: 3s
+      retries: 8
+      start_period: 15s
     restart: unless-stopped
 
 volumes:
+  # Fixed name so a future blue-green apps stack can share the same volume
+  # if ever attached; project prefix would otherwise isolate it.
   pgdata:
+    name: devcx_pgdata

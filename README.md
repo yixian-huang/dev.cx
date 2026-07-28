@@ -10,7 +10,7 @@
 
 - **api/** — Go(net/http + pgx),PostgreSQL,goose 自动迁移,无框架
 - **web/** — React 19 + Vite SSR(自建 server.mjs),Tailwind,i18next(zh/en)
-- **deploy/** — Docker compose 生产编排(compose.production.yml + Dockerfile ×2)
+- **deploy/** — Docker compose 生产编排 + `release.sh`（rolling / blue-green）
 
 ## 本地起步
 
