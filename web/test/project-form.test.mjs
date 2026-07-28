@@ -9,6 +9,22 @@ async function load(mod) {
 }
 test.after(async () => { await vite?.close() })
 
+test('collectFieldErrors and firstInvalidFieldId order name then slug', async () => {
+  const {
+    emptyDraft, validateDraft, validateSlug, collectFieldErrors, firstInvalidFieldId, PROJECT_FIELD_ID,
+  } = await load('/src/lib/project-form.ts')
+  const d = emptyDraft()
+  const errors = validateDraft(d)
+  const slugError = validateSlug('')
+  const list = collectFieldErrors(errors, slugError)
+  assert.equal(list[0].id, PROJECT_FIELD_ID.name)
+  assert.equal(list[1].id, PROJECT_FIELD_ID.slug)
+  assert.equal(firstInvalidFieldId(errors, slugError), PROJECT_FIELD_ID.name)
+  // CJK 名合法但 slug 空 → 首错落在 slug
+  const cjk = validateDraft({ ...d, name: '图鲤' })
+  assert.equal(firstInvalidFieldId(cjk, validateSlug('')), PROJECT_FIELD_ID.slug)
+})
+
 test('validateDraft mirrors server limits (rune-counted, per project_handlers.go)', async () => {
   const { emptyDraft, validateDraft, hasErrors, PROJECT_LIMITS } = await load('/src/lib/project-form.ts')
 

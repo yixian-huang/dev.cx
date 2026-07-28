@@ -12,6 +12,7 @@ import {
   STAGE_LABEL_KEY,
   AUDIENCE_OPTIONS,
   PROJECT_LIMITS,
+  PROJECT_FIELD_ID,
   isTechTag,
   runeLen,
 } from '@/lib/project-form';
@@ -39,10 +40,11 @@ function SectionHeading({ no, text }: { no: string; text: string }) {
   );
 }
 
-function FieldLabel({ text }: { text: string }) {
+function FieldLabel({ text, required }: { text: string; required?: boolean }) {
   return (
     <label className="text-[11px] text-foreground-400 tracking-wider uppercase font-medium block mb-1.5">
       {text}
+      {required && <span className="text-accent-600 ml-1 normal-case tracking-normal">*</span>}
     </label>
   );
 }
@@ -50,7 +52,16 @@ function FieldLabel({ text }: { text: string }) {
 function ErrorText({ error }: { error?: FieldError }) {
   const { t } = useTranslation();
   if (!error) return null;
-  return <p className="text-[12px] text-primary-700 mt-1.5">{t(error.key, error.params)}</p>;
+  return (
+    <p role="alert" className="text-[13px] font-medium text-primary-700 mt-1.5 leading-snug">
+      {t(error.key, error.params)}
+    </p>
+  );
+}
+
+function fieldShell(hasError: boolean, base: string): string {
+  if (!hasError) return base;
+  return `${base} ring-1 ring-primary-500/45 bg-primary-50/40`;
 }
 
 /* ── 5a:下划线选中(非实底 pill),阶段(单选)/受众(多选)共用——value 传数组即多选,
@@ -71,6 +82,7 @@ function UnderlineChoice({
         return (
           <button
             key={opt.key}
+            type="button"
             onClick={() => onChange(opt.key)}
             className={`text-[13px] bg-transparent border-0 p-0 transition-colors duration-200 cursor-pointer ${
               active
@@ -87,7 +99,7 @@ function UnderlineChoice({
 }
 
 const inputClass =
-  'w-full text-[14px] text-foreground-900 bg-background-100 px-3 py-2 rounded-xs outline-none border-none placeholder:text-foreground-300 transition-colors duration-200';
+  'w-full text-[14px] text-foreground-900 bg-background-100 px-3 py-2 rounded-xs outline-none border border-transparent placeholder:text-foreground-300 transition-colors duration-200';
 
 export default function ProjectFormFields({ draft, errors, onChange, slugField, slugReadonly }: ProjectFormFieldsProps) {
   const { t } = useTranslation();
@@ -137,29 +149,40 @@ export default function ProjectFormFields({ draft, errors, onChange, slugField, 
         <SectionHeading no="01" text={t('project.basicInfo')} />
         <div className="space-y-5">
           <div>
-            {/* 5a:产品名 = 24px serif 无框输入 */}
+            <FieldLabel text={t('project.nameLabel', '产品名')} required />
+            {/* 5a:产品名 = 24px serif 无框输入;有错时加 ring,避免用户看不见字段级错误 */}
             <input
+              id={PROJECT_FIELD_ID.name}
               type="text"
               value={draft.name}
               onChange={(e) => onChange({ name: e.target.value })}
               placeholder={t('project.namePlaceholder')}
-              className="w-full font-heading text-2xl font-semibold text-foreground-950 bg-transparent placeholder:text-foreground-300 py-1 outline-none border-none"
+              aria-invalid={Boolean(errors.name)}
+              className={fieldShell(
+                Boolean(errors.name),
+                'w-full font-heading text-2xl font-semibold text-foreground-950 bg-transparent placeholder:text-foreground-300 py-1 outline-none border border-transparent rounded-xs',
+              )}
             />
             <ErrorText error={errors.name} />
           </div>
           {(slugField || slugReadonly !== undefined) && (
             <div>
-              <FieldLabel text={t('project.publicUrl')} />
+              <FieldLabel text={t('project.publicUrl')} required={Boolean(slugField)} />
               <div className="flex items-center font-mono text-[13px]">
                 <span className="text-foreground-400 shrink-0">dev.cx/p/</span>
                 {slugField ? (
                   <input
+                    id={PROJECT_FIELD_ID.slug}
                     type="text"
                     value={slugField.value}
                     onChange={(e) => slugField.onChange(e.target.value)}
                     placeholder={t('project.slugPlaceholder')}
                     spellCheck={false}
-                    className="flex-1 font-mono text-[13px] text-foreground-900 bg-background-100 px-2.5 py-1.5 ml-1 rounded-xs outline-none border-none placeholder:text-foreground-300"
+                    aria-invalid={Boolean(slugField.error)}
+                    className={fieldShell(
+                      Boolean(slugField.error),
+                      'flex-1 font-mono text-[13px] text-foreground-900 bg-background-100 px-2.5 py-1.5 ml-1 rounded-xs outline-none border border-transparent placeholder:text-foreground-300',
+                    )}
                   />
                 ) : (
                   <span className="text-foreground-600">{slugReadonly}</span>
@@ -174,16 +197,18 @@ export default function ProjectFormFields({ draft, errors, onChange, slugField, 
           <div>
             <FieldLabel text={t('project.tagline')} />
             <input
+              id={PROJECT_FIELD_ID.tagline}
               type="text"
               value={draft.tagline}
               onChange={(e) => onChange({ tagline: e.target.value })}
               placeholder={t('project.taglinePlaceholder')}
-              className={inputClass}
+              aria-invalid={Boolean(errors.tagline)}
+              className={fieldShell(Boolean(errors.tagline), inputClass)}
             />
-            <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline justify-between gap-3">
               <ErrorText error={errors.tagline} />
               <span
-                className={`ml-auto font-mono text-[11px] mt-1.5 ${
+                className={`ml-auto font-mono text-[11px] mt-1.5 shrink-0 ${
                   taglineLen > PROJECT_LIMITS.tagline ? 'text-primary-700' : 'text-foreground-300'
                 }`}
               >
@@ -219,21 +244,29 @@ export default function ProjectFormFields({ draft, errors, onChange, slugField, 
       </section>
 
       {/* 02 产品介绍 */}
-      <section className="mt-8">
+      <section className="mt-8" id={PROJECT_FIELD_ID.description}>
         <SectionHeading no="02" text={t('project.description')} />
-        <MarkdownEditor
-          value={draft.description}
-          onChange={(v) => onChange({ description: v })}
-          placeholder={t('project.descriptionPlaceholder')}
-          minHeight={140}
-        />
+        <div className={errors.description ? 'rounded-xs ring-1 ring-primary-500/40 p-1 -m-1' : ''}>
+          <MarkdownEditor
+            value={draft.description}
+            onChange={(v) => onChange({ description: v })}
+            placeholder={t('project.descriptionPlaceholder')}
+            minHeight={140}
+          />
+        </div>
         <ErrorText error={errors.description} />
       </section>
 
       {/* 03 标签(混排:技术类 mono、场景类正文字体) */}
       <section className="mt-8">
         <SectionHeading no="03" text={t('project.tags')} />
-        <div className="flex flex-wrap items-center gap-2">
+        <div
+          id={PROJECT_FIELD_ID.tags}
+          className={fieldShell(
+            Boolean(errors.tags),
+            'flex flex-wrap items-center gap-2 rounded-xs border border-transparent px-0.5 py-0.5',
+          )}
+        >
           {draft.tags.map((tag) => (
             <span
               key={tag}
@@ -243,6 +276,7 @@ export default function ProjectFormFields({ draft, errors, onChange, slugField, 
             >
               {tag}
               <button
+                type="button"
                 onClick={() => removeTag(tag)}
                 className="w-4 h-4 flex items-center justify-center text-secondary-400 hover:text-secondary-700 opacity-0 group-hover/tag:opacity-100 transition-opacity cursor-pointer"
                 aria-label={`删除 ${tag}`}
@@ -273,23 +307,32 @@ export default function ProjectFormFields({ draft, errors, onChange, slugField, 
         <SectionHeading no="04" text={t('project.links')} />
         <div className="space-y-2">
           {draft.links.map((link, idx) => (
-            <div key={idx}>
+            <div key={idx} id={PROJECT_FIELD_ID.link(idx)}>
               <div className="flex items-center gap-2 group/link">
                 <input
                   type="text"
                   value={link.label}
                   onChange={(e) => updateLink(idx, 'label', e.target.value)}
                   placeholder={t('project.linkLabelPlaceholder')}
-                  className="w-[100px] text-[13px] text-foreground-900 bg-background-100 px-2.5 py-1.5 rounded-xs outline-none border-none placeholder:text-foreground-300"
+                  aria-invalid={Boolean(errors.links?.[idx])}
+                  className={fieldShell(
+                    Boolean(errors.links?.[idx]),
+                    'w-[100px] text-[13px] text-foreground-900 bg-background-100 px-2.5 py-1.5 rounded-xs outline-none border border-transparent placeholder:text-foreground-300',
+                  )}
                 />
                 <input
                   type="url"
                   value={link.url}
                   onChange={(e) => updateLink(idx, 'url', e.target.value)}
                   placeholder={t('project.linkUrlPlaceholder')}
-                  className="flex-1 font-mono text-[13px] text-foreground-900 bg-background-100 px-2.5 py-1.5 rounded-xs outline-none border-none placeholder:text-foreground-300"
+                  aria-invalid={Boolean(errors.links?.[idx])}
+                  className={fieldShell(
+                    Boolean(errors.links?.[idx]),
+                    'flex-1 font-mono text-[13px] text-foreground-900 bg-background-100 px-2.5 py-1.5 rounded-xs outline-none border border-transparent placeholder:text-foreground-300',
+                  )}
                 />
                 <button
+                  type="button"
                   onClick={() => removeLink(idx)}
                   className="shrink-0 w-5 h-5 flex items-center justify-center text-foreground-300 hover:text-foreground-500 opacity-0 group-hover/link:opacity-100 transition-opacity cursor-pointer"
                   aria-label={t('project.linkRemove')}
@@ -301,6 +344,7 @@ export default function ProjectFormFields({ draft, errors, onChange, slugField, 
             </div>
           ))}
           <button
+            type="button"
             onClick={addLink}
             className="inline-flex items-center gap-1.5 text-[13px] text-foreground-500 hover:text-primary-500 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0"
           >
@@ -311,12 +355,14 @@ export default function ProjectFormFields({ draft, errors, onChange, slugField, 
       </section>
 
       {/* 05 产品截图 */}
-      <section className="mt-8">
+      <section className="mt-8" id={PROJECT_FIELD_ID.screenshots}>
         <SectionHeading no="05" text={t('project.screenshots')} />
-        <ScreenshotGridField
-          screenshots={draft.screenshots}
-          onUpdate={(v) => onChange({ screenshots: v })}
-        />
+        <div className={errors.screenshots ? 'rounded-xs ring-1 ring-primary-500/40 p-1' : ''}>
+          <ScreenshotGridField
+            screenshots={draft.screenshots}
+            onUpdate={(v) => onChange({ screenshots: v })}
+          />
+        </div>
         <ErrorText error={errors.screenshots} />
       </section>
     </>

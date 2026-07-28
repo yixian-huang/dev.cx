@@ -205,6 +205,63 @@ export function hasErrors(e: DraftErrors): boolean {
   return Object.keys(e).length > 0
 }
 
+/** DOM id 前缀——与 ProjectFormFields 输入控件 id 对齐,提交失败时 focus/scroll 用。 */
+export const PROJECT_FIELD_ID = {
+  name: 'project-field-name',
+  slug: 'project-field-slug',
+  tagline: 'project-field-tagline',
+  description: 'project-field-description',
+  tags: 'project-field-tags',
+  screenshots: 'project-field-screenshots',
+  link: (i: number) => `project-field-link-${i}`,
+} as const
+
+/** 按表单自上而下的顺序收集错误,供摘要列表与首错聚焦共用。 */
+export function collectFieldErrors(
+  errors: DraftErrors,
+  slugError?: FieldError,
+): { id: string; error: FieldError }[] {
+  const out: { id: string; error: FieldError }[] = []
+  if (errors.name) out.push({ id: PROJECT_FIELD_ID.name, error: errors.name })
+  if (slugError) out.push({ id: PROJECT_FIELD_ID.slug, error: slugError })
+  if (errors.tagline) out.push({ id: PROJECT_FIELD_ID.tagline, error: errors.tagline })
+  if (errors.description) out.push({ id: PROJECT_FIELD_ID.description, error: errors.description })
+  if (errors.tags) out.push({ id: PROJECT_FIELD_ID.tags, error: errors.tags })
+  if (errors.links) {
+    for (const key of Object.keys(errors.links).map(Number).sort((a, b) => a - b)) {
+      const err = errors.links[key]
+      if (err) out.push({ id: PROJECT_FIELD_ID.link(key), error: err })
+    }
+  }
+  if (errors.linksCount) out.push({ id: PROJECT_FIELD_ID.link(0), error: errors.linksCount })
+  if (errors.screenshots) out.push({ id: PROJECT_FIELD_ID.screenshots, error: errors.screenshots })
+  return out
+}
+
+export function firstInvalidFieldId(errors: DraftErrors, slugError?: FieldError): string | null {
+  return collectFieldErrors(errors, slugError)[0]?.id ?? null
+}
+
+/** 提交失败后:滚到首个错误并尽量 focus 可编辑控件。 */
+export function focusProjectField(fieldId: string | null): void {
+  if (!fieldId || typeof document === 'undefined') return
+  const el = document.getElementById(fieldId)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+    try {
+      el.focus({ preventScroll: true })
+    } catch {
+      el.focus()
+    }
+  } else {
+    const nested = el.querySelector('input, textarea, select, [contenteditable="true"]') as
+      | HTMLElement
+      | null
+    nested?.focus?.()
+  }
+}
+
 export interface ProjectPayload {
   name: string
   tagline: string

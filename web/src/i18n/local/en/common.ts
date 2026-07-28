@@ -134,6 +134,10 @@ const common: Record<string, string> = {
   // New Project
   "newProject.title": "Create Product",
   "newProject.deck": "A complete product page so the community can understand what you're building",
+  "newProject.requiredHint": "Fields marked * are required; the rest can wait until after create.",
+  "newProject.formIncomplete": "Some required fields are missing or invalid. Fix them, then try again.",
+  "newProject.formIncompleteCount": "{{count}} items need attention — use the list below.",
+  "newProject.jumpToError": "Jump to first issue",
   "newProject.cancel": "Cancel",
   "newProject.create": "Create Product",
   "newProject.creating": "Creating...",
@@ -702,6 +706,7 @@ const common: Record<string, string> = {
   "project.linkRemove": "Remove link",
   "project.linkLabelPlaceholder": "Label",
   "project.linkUrlPlaceholder": "https://...",
+  "project.nameLabel": "Product name",
   "project.err.nameRequired": "Product name is required",
   "project.err.tooLong": "Too long (max {{max}} characters)",
   "project.err.tooMany": "Too many (max {{max}})",
