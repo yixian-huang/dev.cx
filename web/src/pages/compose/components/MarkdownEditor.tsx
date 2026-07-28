@@ -1,7 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, type ClipboardEvent, type KeyboardEvent } from 'react';
 import Markdown from '@/components/base/Markdown';
-import EditorToolbar from '@/components/base/EditorToolbar';
+import EditorToolbar, { toolbarRunWrap } from '@/components/base/EditorToolbar';
 import ImageUpload, { type ImageUploadResult } from '@/components/feature/ImageUpload';
+import { uploadImage } from '@/lib/actions';
+import {
+  applyToTextarea,
+  indentSelection,
+  insertImageMarkdown,
+  insertLink,
+  mdStats,
+  snapshotOf,
+} from '@/lib/md-textarea';
 
 type EditorMode = 'write' | 'preview' | 'split';
 
@@ -15,12 +24,16 @@ interface MarkdownEditorProps {
 export default function MarkdownEditor({
   value,
   onChange,
-  placeholder = '开始写 Markdown...',
+  placeholder = '开始写 Markdown… 支持 ⌘B / ⌘I / ⌘K，粘贴图片自动上传',
   minHeight = 320,
 }: MarkdownEditorProps) {
   const [mode, setMode] = useState<EditorMode>('write');
+  const [selectionTick, setSelectionTick] = useState(0);
+  const [pasteStatus, setPasteStatus] = useState<string | undefined>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+
+  const stats = mdStats(value);
 
   /* ── Auto-grow textarea ── */
   useEffect(() => {
@@ -29,6 +42,10 @@ export default function MarkdownEditor({
     el.style.height = 'auto';
     el.style.height = `${Math.max(el.scrollHeight, minHeight)}px`;
   }, [value, mode, minHeight]);
+
+  const bumpSelection = useCallback(() => {
+    setSelectionTick((n) => n + 1);
+  }, []);
 
   /* ── Sync scroll in split mode ── */
   const handleTextareaScroll = useCallback(() => {
@@ -49,36 +66,84 @@ export default function MarkdownEditor({
     ta.scrollTop = ratio * (ta.scrollHeight - ta.clientHeight);
   }, [mode]);
 
-  /* ── Insert image markdown at cursor ──
-     沿用 EditorToolbar 里 insertFormatting 同样的「原生 setter + dispatch input 事件」手法
-     (它是模块内私有函数、未导出，这里不改 EditorToolbar.tsx——两处各自实现一份，避免把图片
-     上传行为泄漏到复用同一个 EditorToolbar 的 RichTextarea 等其它场景)。光标 API 不可用时
-     (理论上不会发生，因为按钮只在 write/split 模式下渲染，此时 textareaRef 必挂载)退化为
-     追加到末尾，不丢已输入内容。 */
-  const insertImageMarkdown = useCallback(
+  const insertImageAtCursor = useCallback(
     (result: ImageUploadResult) => {
-      const markdown = `![](${result.url})`;
       const el = textareaRef.current;
       if (!el) {
-        onChange(`${value}${value.endsWith('\n') || !value ? '' : '\n'}${markdown}\n`);
+        onChange(`${value}${value.endsWith('\n') || !value ? '' : '\n'}![](${result.url})\n`);
         return;
       }
-      const start = el.selectionStart ?? el.value.length;
-      const end = el.selectionEnd ?? el.value.length;
-      const newValue = el.value.substring(0, start) + markdown + el.value.substring(end);
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype,
-        'value',
-      )?.set;
-      nativeInputValueSetter?.call(el, newValue);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      setTimeout(() => {
-        const pos = start + markdown.length;
-        el.setSelectionRange(pos, pos);
-        el.focus();
-      }, 0);
+      applyToTextarea(el, insertImageMarkdown(snapshotOf(el), result.url));
     },
     [value, onChange],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      const el = textareaRef.current;
+      if (!el) return;
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && !e.shiftKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toolbarRunWrap(el, 'bold');
+        bumpSelection();
+        return;
+      }
+      if (mod && !e.shiftKey && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        toolbarRunWrap(el, 'italic');
+        bumpSelection();
+        return;
+      }
+      if (mod && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const selected = el.value.slice(el.selectionStart, el.selectionEnd);
+        const url = window.prompt('链接 URL', 'https://');
+        if (url === null || !url.trim()) return;
+        const text =
+          selected || window.prompt('显示文字（可空）', '链接文字') || '链接文字';
+        applyToTextarea(el, insertLink(snapshotOf(el), url, text));
+        bumpSelection();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        applyToTextarea(el, indentSelection(snapshotOf(el), e.shiftKey));
+        bumpSelection();
+      }
+    },
+    [bumpSelection],
+  );
+
+  const handlePaste = useCallback(
+    async (e: ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length === 0) return;
+      e.preventDefault();
+      setPasteStatus('上传图片…');
+      try {
+        for (const file of files) {
+          const result = await uploadImage(fetch, file);
+          insertImageAtCursor(result);
+        }
+        setPasteStatus(undefined);
+      } catch {
+        setPasteStatus('图片上传失败');
+        setTimeout(() => setPasteStatus(undefined), 2500);
+      }
+    },
+    [insertImageAtCursor],
   );
 
   const modes: { key: EditorMode; label: string; icon: string }[] = [
@@ -87,6 +152,19 @@ export default function MarkdownEditor({
     { key: 'split', label: '对照', icon: 'ri-layout-column-line' },
   ];
 
+  const toolbar = (
+    <div className="flex items-center gap-0.5 px-2 pt-2 pb-1 border-b border-background-200/30">
+      <EditorToolbar textareaRef={textareaRef} selectionTick={selectionTick} />
+      <ImageUpload
+        onUploaded={insertImageAtCursor}
+        className="w-7 h-7 flex items-center justify-center rounded-xs text-foreground-400 hover:text-foreground-700 hover:bg-background-200/60 transition-colors duration-150 cursor-pointer disabled:opacity-50"
+        label="插入图片"
+      >
+        <i className="ri-image-add-line text-[15px]"></i>
+      </ImageUpload>
+    </div>
+  );
+
   return (
     <div className="w-full">
       {/* Mode tabs */}
@@ -94,6 +172,7 @@ export default function MarkdownEditor({
         {modes.map((m) => (
           <button
             key={m.key}
+            type="button"
             onClick={() => setMode(m.key)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-xs transition-colors duration-200 cursor-pointer whitespace-nowrap ${
               mode === m.key
@@ -106,29 +185,31 @@ export default function MarkdownEditor({
           </button>
         ))}
         <div className="flex-1"></div>
-        <span className="text-[11px] text-foreground-300 font-mono">{value.length} 字</span>
+        {pasteStatus && (
+          <span className="text-[11px] text-primary-600 mr-2">{pasteStatus}</span>
+        )}
+        <span className="text-[11px] text-foreground-300 font-mono" title="字数 · 词数 · 约读时间">
+          {stats.chars} 字 · {stats.words} 词 · ~{stats.minutes} 分钟
+        </span>
       </div>
 
       {/* Editor area */}
       {mode === 'write' && (
         <div className="border border-background-200/50 rounded-xs overflow-hidden focus-within:border-primary-300/50 transition-colors duration-200">
-          <div className="flex items-center gap-0.5 px-2 pt-2 pb-1 border-b border-background-200/30">
-            <EditorToolbar textareaRef={textareaRef} />
-            <ImageUpload
-              onUploaded={insertImageMarkdown}
-              className="w-7 h-7 flex items-center justify-center rounded-xs text-foreground-400 hover:text-foreground-700 hover:bg-background-200/60 transition-colors duration-150 cursor-pointer disabled:opacity-50"
-              label="插入图片"
-            >
-              <i className="ri-image-add-line text-[15px]"></i>
-            </ImageUpload>
-          </div>
+          {toolbar}
           <textarea
             ref={textareaRef}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onSelect={bumpSelection}
+            onKeyUp={bumpSelection}
+            onClick={bumpSelection}
+            onPaste={(e) => void handlePaste(e)}
             placeholder={placeholder}
             className="w-full text-[15px] leading-relaxed text-foreground-900 bg-background-100 placeholder:text-foreground-300 px-3 py-2.5 outline-none resize-none font-body"
             style={{ minHeight }}
+            spellCheck
           />
         </div>
       )}
@@ -149,24 +230,21 @@ export default function MarkdownEditor({
       {mode === 'split' && (
         <div className="flex gap-4" style={{ minHeight }}>
           <div className="flex-1 flex flex-col min-w-0 border border-background-200/50 rounded-xs overflow-hidden focus-within:border-primary-300/50 transition-colors duration-200">
-            <div className="flex items-center gap-0.5 px-2 pt-2 pb-1 border-b border-background-200/30">
-              <EditorToolbar textareaRef={textareaRef} />
-              <ImageUpload
-                onUploaded={insertImageMarkdown}
-                className="w-7 h-7 flex items-center justify-center rounded-xs text-foreground-400 hover:text-foreground-700 hover:bg-background-200/60 transition-colors duration-150 cursor-pointer disabled:opacity-50"
-                label="插入图片"
-              >
-                <i className="ri-image-add-line text-[15px]"></i>
-              </ImageUpload>
-            </div>
+            {toolbar}
             <textarea
               ref={textareaRef}
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onScroll={handleTextareaScroll}
+              onKeyDown={handleKeyDown}
+              onSelect={bumpSelection}
+              onKeyUp={bumpSelection}
+              onClick={bumpSelection}
+              onPaste={(e) => void handlePaste(e)}
               placeholder={placeholder}
               className="w-full flex-1 text-[15px] leading-relaxed text-foreground-900 bg-background-100 placeholder:text-foreground-300 px-3 py-2.5 outline-none resize-none font-body"
               style={{ minHeight, height: minHeight }}
+              spellCheck
             />
           </div>
           <div className="w-px bg-background-200/40 shrink-0"></div>
