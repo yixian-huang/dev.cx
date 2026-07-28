@@ -63,15 +63,6 @@ function routePlan(rawPathname) {
   return { kind: 'static' }
 }
 
-// 纯函数(与 SSR 请求处理解耦，便于独立推理):把两组帖子按 created_at 降序合并,
-// 截断到 n 条——home 首屏的"讨论区"由 discuss/ask 各取 limit=8 后在服务端合并排序,
-// 页面拿到就是最终展示顺序,不必自己重新实现合并逻辑。
-function mergeByCreatedAt(a, b, n) {
-  return [...a, ...b]
-    .sort((x, y) => Date.parse(y.created_at) - Date.parse(x.created_at))
-    .slice(0, n)
-}
-
 async function prefetch(plan, client) {
   // 全路由公用的会话探测：/api/me 未登录时 401/404，tryGet 吞掉 4xx 返回 null；
   // 5xx 会抛错，.catch 兜底成 null——会话探测绝不能把整页渲染拖下水。
@@ -121,22 +112,20 @@ async function prefetch(plan, client) {
       return withAuth({ data: { projects: r ?? { projects: [], next_cursor: null }, stats: stats ?? null } })
     }
     case 'home': {
-      // 讨论区没有单一的"最新混合帖"端点：discuss/ask 各取 limit=8,服务端合并排序取前 8,
-      // 注入的形状是 {posts:[...], next_cursor:null}，与 /feed 的 posts 信封同形，
-      // 好让页面层的读取逻辑保持一致(见 mergeByCreatedAt 上方注释)。
-      const [discuss, ask, proj, stats] = await Promise.all([
-        client.tryGet('/api/posts?type=discuss&limit=8'),
-        client.tryGet('/api/posts?type=ask&limit=8'),
+      // 讨论区与 DiscussionPreview 客户端重取同路径:/api/posts?limit=8(全类型最新)。
+      // 旧实现只拉 type=discuss|ask 再合并——真实内容大量是 show/build,硬刷新会注入
+      // posts:[] ,而 useApiData 见到已定义的 SSR 值就不再客户端补取,首页讨论区永久空态。
+      const [posts, proj, stats, weeklyLatest] = await Promise.all([
+        client.tryGet('/api/posts?limit=8'),
         // B2:首页焦点 = trending(近 7 天回复热度)前 5
         client.tryGet('/api/projects?sort=trending&limit=5'),
         client.tryGet('/api/stats'),
+        // 上期周刊行(B2):latest 未发布时 404 → null,刊头该行不渲染。
+        client.tryGet('/api/weekly/latest'),
       ])
-      // 上期周刊行(B2):latest 未发布时 404 → null,刊头该行不渲染。
-      const weeklyLatest = await client.tryGet('/api/weekly/latest')
-      const merged = mergeByCreatedAt(discuss?.posts ?? [], ask?.posts ?? [], 8)
       return withAuth({
         data: {
-          posts: { posts: merged, next_cursor: null },
+          posts: posts ?? { posts: [], next_cursor: null },
           projects: proj ?? { projects: [], next_cursor: null },
           stats: stats ?? null,
           weekly_latest: weeklyLatest ?? null,

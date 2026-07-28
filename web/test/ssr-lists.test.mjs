@@ -43,9 +43,10 @@ test('explore renders api projects, not mock', async () => {
 })
 
 test('home renders discussions and latest projects from api', async () => {
+  // 与 server.mjs home 预取 + DiscussionPreview 客户端 path 对齐:全类型 /api/posts?limit=8
+  // (不再只拉 discuss|ask——show/build 帖在硬刷新时也会进首屏)。
   const api = await stubAPI({
-    '/api/posts?type=discuss&limit=8': { body: posts },
-    '/api/posts?type=ask&limit=8': { body: { posts: [], next_cursor: null } },
+    '/api/posts?limit=8': { body: posts },
     '/api/projects?sort=trending&limit=5': { body: projects },
     '/api/stats': { body: { builders: 2, products: 3, discussions: 4 } },
   })
