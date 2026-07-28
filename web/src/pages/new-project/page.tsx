@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageShell from '@/components/feature/PageShell';
 import ProjectFormFields from '@/components/feature/ProjectFormFields';
+import ProjectFormShell from '@/components/feature/ProjectFormShell';
 import FormAlert from '@/components/base/FormAlert';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient, type ApiError } from '@/lib/api';
@@ -19,11 +20,10 @@ import {
   hasErrors,
   draftToPayload,
   collectFieldErrors,
-  firstInvalidFieldId,
-  focusProjectField,
+  scheduleFocusProjectField,
 } from '@/lib/project-form';
 
-// 创建产品页:紧凑双栏表单,成功后 replace 跳转产品详情 /p/:slug。
+// 创建产品页:ProjectFormShell + compact 字段,成功后 replace 跳转 /p/:slug。
 
 const NO_ERRORS: DraftErrors = {};
 
@@ -35,11 +35,12 @@ export default function NewProjectPage() {
 
   const [draft, setDraft] = useState<ProjectDraft>(emptyDraft);
   const [slug, setSlug] = useState('');
-  const [slugTouched, setSlugTouched] = useState(false);
+  // 用户手动改过 slug 后不再跟 name 自动派生
+  const slugTouchedRef = useRef(false);
   const [slugServerError, setSlugServerError] = useState<FieldError | undefined>(undefined);
   const [showErrors, setShowErrors] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | undefined>(undefined);
+  const [formError, setFormError] = useState<string | undefined>(undefined);
 
   const errors = useMemo(() => validateDraft(draft), [draft]);
   const slugError = slugServerError ?? validateSlug(slug);
@@ -50,47 +51,37 @@ export default function NewProjectPage() {
 
   const handleChange = useCallback((patch: Partial<ProjectDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
-    if (patch.name !== undefined) {
-      setSlugTouched((touched) => {
-        if (!touched) {
-          setSlug(slugStem(patch.name ?? ''));
-          setSlugServerError(undefined);
-        }
-        return touched;
-      });
+    if (patch.name !== undefined && !slugTouchedRef.current) {
+      setSlug(slugStem(patch.name ?? ''));
+      setSlugServerError(undefined);
     }
-    setCreateError(undefined);
+    setFormError(undefined);
   }, []);
 
   const handleSlugChange = useCallback((v: string) => {
-    setSlugTouched(true);
+    slugTouchedRef.current = true;
     setSlug(v.toLowerCase().trim());
     setSlugServerError(undefined);
-    setCreateError(undefined);
+    setFormError(undefined);
   }, []);
 
   const revealValidation = useCallback((nextErrors: DraftErrors, nextSlugError?: FieldError) => {
     setShowErrors(true);
     const items = collectFieldErrors(nextErrors, nextSlugError);
-    const summary =
+    setFormError(
       items.length === 0
-        ? t('newProject.formIncomplete')
-        : t('newProject.formIncompleteCount', { count: items.length });
-    setCreateError(summary);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        focusProjectField(firstInvalidFieldId(nextErrors, nextSlugError));
-      });
-    });
+        ? t('project.formIncomplete')
+        : t('project.formIncompleteCount', { count: items.length }),
+    );
+    scheduleFocusProjectField(nextErrors, nextSlugError);
   }, [t]);
 
-  // 成功:replace 进产品详情,避免返回键回到空表单。
   const handleCreate = useCallback(async () => {
     if (creating) return;
 
     if (!emailVerified) {
       setShowErrors(true);
-      setCreateError(t('compose.needEmailVerify'));
+      setFormError(t('compose.needEmailVerify'));
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -102,7 +93,7 @@ export default function NewProjectPage() {
       return;
     }
 
-    setCreateError(undefined);
+    setFormError(undefined);
     setCreating(true);
     try {
       const client = createClient({ baseURL: '' });
@@ -126,7 +117,7 @@ export default function NewProjectPage() {
         return;
       }
       setShowErrors(true);
-      setCreateError(apiErrorMessage(e));
+      setFormError(apiErrorMessage(e));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setCreating(false);
@@ -135,99 +126,44 @@ export default function NewProjectPage() {
 
   return (
     <PageShell width="wide" pageEnter contentClassName="pb-4">
-      {/* 紧凑刊头 */}
-      <header className="pt-6 pb-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-        <div>
-          <h1 className="font-heading text-[22px] md:text-[24px] font-semibold text-foreground-950 leading-tight">
-            {t('newProject.title')}
-          </h1>
-          <p className="text-[12px] text-foreground-400 mt-1">
-            {t('newProject.deckCompact')}
-          </p>
-        </div>
-        <p className="text-[11px] text-foreground-400 shrink-0">
-          {t('newProject.requiredHint')}
-        </p>
-      </header>
-
-      {showErrors && (fieldErrors.length > 0 || createError) && (
-        <FormAlert className="mb-3">
-          <p>{createError ?? t('newProject.formIncomplete')}</p>
-          {fieldErrors.length > 0 && (
-            <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-normal">
-              {fieldErrors.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => focusProjectField(item.id)}
-                    className="text-left text-[12px] underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0 text-inherit"
-                  >
-                    · {t(item.error.key, item.error.params)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </FormAlert>
-      )}
-
-      {!emailVerified && (
-        <FormAlert tone="info" className="mb-3">
-          {t('compose.needEmailVerify')}
-        </FormAlert>
-      )}
-
-      <ProjectFormFields
-        layout="compact"
-        draft={draft}
-        errors={showErrors ? errors : NO_ERRORS}
-        onChange={handleChange}
-        slugField={{
-          value: slug,
-          onChange: handleSlugChange,
-          error: showErrors ? slugError : slugServerError,
-        }}
-      />
-
-      {/* 动作:贴表单底,非超高 sticky,减少「表单+底栏」叠高 */}
-      <div className="mt-4 pt-3 border-t border-foreground-200/40 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between pb-8">
-        <div className="min-h-[1.25rem] flex-1 min-w-0">
-          {(createError || (showErrors && fieldErrors.length > 0)) && (
-            <FormAlert className="py-2">
-              {createError ?? t('newProject.formIncomplete')}
-              {fieldErrors[0] && (
-                <>
-                  {' · '}
-                  <button
-                    type="button"
-                    onClick={() => focusProjectField(fieldErrors[0].id)}
-                    className="underline underline-offset-2 hover:opacity-80 cursor-pointer bg-transparent border-none p-0 text-inherit"
-                  >
-                    {t('newProject.jumpToError')}
-                  </button>
-                </>
-              )}
+      <ProjectFormShell
+        density="compact"
+        title={t('newProject.title')}
+        subtitle={t('newProject.deckCompact')}
+        requiredHint={t('newProject.requiredHint')}
+        showErrors={showErrors}
+        fieldErrors={fieldErrors}
+        formError={formError}
+        banners={
+          !emailVerified ? (
+            <FormAlert tone="info" className="mb-3">
+              {t('compose.needEmailVerify')}
             </FormAlert>
-          )}
-        </div>
-        <div className="flex items-center justify-end gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="px-4 py-1.5 text-[13px] text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none"
-          >
-            {t('newProject.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleCreate()}
-            disabled={creating}
-            className="inline-flex items-center gap-2 px-5 py-1.5 text-[13px] font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {creating ? t('newProject.creating') : t('newProject.create')}
-          </button>
-        </div>
-      </div>
+          ) : null
+        }
+        secondaryAction={{
+          label: t('newProject.cancel'),
+          onClick: () => navigate(-1),
+        }}
+        primaryAction={{
+          label: t('newProject.create'),
+          loadingLabel: t('newProject.creating'),
+          loading: creating,
+          onClick: () => void handleCreate(),
+        }}
+      >
+        <ProjectFormFields
+          layout="compact"
+          draft={draft}
+          errors={showErrors ? errors : NO_ERRORS}
+          onChange={handleChange}
+          slugField={{
+            value: slug,
+            onChange: handleSlugChange,
+            error: showErrors ? slugError : slugServerError,
+          }}
+        />
+      </ProjectFormShell>
     </PageShell>
   );
 }

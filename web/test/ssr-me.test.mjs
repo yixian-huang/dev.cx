@@ -12,8 +12,11 @@ test('/@handle works tab lists the user projects from api', async () => {
   const ssr = await startSSR(api.port, 5220)
   try {
     const html = await (await fetch('http://127.0.0.1:5220/@ana')).text()
-    // works 是客户端 tab 取数,SSR 首屏至少不能再出现 mock 项目名
     assert.ok(!html.includes('meal-split'), 'mock works leaked into profile ssr')
+    // 默认 works tab 已 SSR 预取:项目名应进首屏 HTML 与数据岛
+    assert.ok(html.includes('ana-proj'), 'works project missing from profile ssr html')
+    assert.ok(html.includes('安娜的项目'), 'works tagline missing from profile ssr html')
+    assert.ok(html.includes('works:ana') || html.includes('"works:ana"'), 'works SSR key missing from data island')
   } finally { ssr.kill(); api.close() }
 })
 

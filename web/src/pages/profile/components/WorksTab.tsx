@@ -11,8 +11,9 @@ import { adaptExploreProject } from '@/lib/adapters/project';
 // 画布 2c Works:Lead(serif 18px + deck + meta 行 + ↳ 最新讨论)+ Quiet 行(同首页 Focus)。
 export default function WorksTab({ profile }: { profile: UIProfile }) {
   const { t } = useTranslation();
-  // works 是纯客户端 tab 取数(非预取 key,server.mjs 不知道这个 key),按 handle 请求该用户的
-  // 项目列表——不像 profile 页顶层那样有 mock 回落,取不到数据时中性留空,不编造/复用 mock。
+  // SSR(server.mjs handle 分支)与客户端重取共用 key `works:${handle}` 与同路径
+  // /api/users/:handle/projects——硬刷新时首屏即可出作品列表,避免默认 tab 先空再闪。
+  // 无数据时中性空态,不编造/复用 mock。
   const { data: rawWorks, loading } = useApiData<unknown>(
     `works:${profile.handle}`,
     profile.handle ? `/api/users/${profile.handle}/projects` : null,

@@ -106,59 +106,101 @@ function routePlan(rawPathname) {
   return { kind: 'static' }
 }
 
-async function prefetch(plan, client) {
-  // 全路由公用的会话探测：/api/me 未登录时 401/404，tryGet 吞掉 4xx 返回 null；
-  // 5xx 会抛错，.catch 兜底成 null——会话探测绝不能把整页渲染拖下水。
-  const auth = await client.tryGet('/api/me').then((r) => r?.user ?? null).catch(() => null)
-  // 每个非 redirect 分支（含 404、static 兜底）都要注入 auth，好让 Navbar 首屏就是真实登录态。
-  const withAuth = (out) => ({ ...out, data: { auth, ...(out.data ?? {}) } })
+// 会话探测：未登录 401/404 → null；5xx 也吞掉。绝不能拖垮整页渲染。
+// 与页面数据并行发起，避免「先 /api/me 再拉正文」的串行水位。
+function fetchAuth(client) {
+  return client.tryGet('/api/me').then((r) => r?.user ?? null).catch(() => null)
+}
 
+function withAuth(out, auth) {
+  // 每个非 redirect 分支（含 404、static 兜底）都要注入 auth，好让 Navbar 首屏就是真实登录态。
+  return { ...out, data: { auth, ...(out.data ?? {}) } }
+}
+
+async function prefetch(plan, client) {
   switch (plan.kind) {
     case 'handle': {
-      // 公开档案数据 + 旧 handle → 新 handle 的改名解析都由 /api/resolve/{handle}
-      // 承担：命中返回用户本体，改名返回 { moved_to }，否则 404。
-      const r = await client.tryGet(`/api/resolve/${encodeURIComponent(plan.handle)}`)
-      if (!r) return withAuth({ status: 404, data: {} })
+      // 公开档案：resolve + 默认 tab(works) + auth 并行。
+      // works 的 SSR key 必须与 WorksTab 的 `works:${handle}` 一致，否则 hydrate 后仍会闪空再客户端补取。
+      // 改名 {moved_to} 时丢弃 works 结果，只 301。
+      const [auth, r, worksByPlan] = await Promise.all([
+        fetchAuth(client),
+        client.tryGet(`/api/resolve/${encodeURIComponent(plan.handle)}`),
+        client.tryGet(`/api/users/${encodeURIComponent(plan.handle)}/projects`),
+      ])
+      if (!r) return withAuth({ status: 404, data: {} }, auth)
       if (r.moved_to) return { redirect: `/@${r.moved_to}` }
-      return withAuth({ data: { user: r.user ?? r } })
+      const user = r.user ?? r
+      const handle = (user && user.handle) || plan.handle
+      let works = worksByPlan
+      // resolve 若归一化了 handle（大小写/别名），按权威 handle 再取一次，保证 key 与 API 路径一致。
+      if (handle !== plan.handle) {
+        works = await client.tryGet(`/api/users/${encodeURIComponent(handle)}/projects`)
+      }
+      return withAuth({
+        data: {
+          user,
+          [`works:${handle}`]: works ?? { projects: [] },
+        },
+      }, auth)
     }
     case 'project': {
-      const p = await client.tryGet(`/api/projects/${encodeURIComponent(plan.slug)}`)
-      if (!p) return withAuth({ status: 404, data: {} })
-      // timeline 端点原样透传信封({timeline:[...], discussions:[...]})——不像 project 分支
-      // 那样拆一层,客户端重取路径走同一个 key 拿到的就是同一个信封,页面层用 unwrap 才需要
-      // 处理不一致的地方是裸对象场景,这里两条路径形状本就一致,不需要 unwrap。
-      const t = await client.tryGet(`/api/projects/${encodeURIComponent(plan.slug)}/timeline`)
-      return withAuth({ data: { project: p.project ?? p, timeline: t ?? { timeline: [], discussions: [] } } })
+      // project 本体与 timeline 并行（404 时 timeline 请求浪费可接受，换 TTFB）。
+      // timeline 端点原样透传信封({timeline,discussions})，与客户端重取形状一致。
+      const slug = encodeURIComponent(plan.slug)
+      const [auth, p, t] = await Promise.all([
+        fetchAuth(client),
+        client.tryGet(`/api/projects/${slug}`),
+        client.tryGet(`/api/projects/${slug}/timeline`),
+      ])
+      if (!p) return withAuth({ status: 404, data: {} }, auth)
+      return withAuth({
+        data: {
+          project: p.project ?? p,
+          timeline: t ?? { timeline: [], discussions: [] },
+        },
+      }, auth)
     }
     case 'post': {
-      const t = await client.tryGet(`/api/posts/${encodeURIComponent(plan.slug)}`)
-      if (!t) return withAuth({ status: 404, data: {} })
-      const r = await client.tryGet(`/api/posts/${encodeURIComponent(plan.slug)}/replies`)
-      return withAuth({ data: { post: t.post ?? t, replies: r?.replies ?? [] } })
+      const slug = encodeURIComponent(plan.slug)
+      const [auth, t, r] = await Promise.all([
+        fetchAuth(client),
+        client.tryGet(`/api/posts/${slug}`),
+        client.tryGet(`/api/posts/${slug}/replies`),
+      ])
+      if (!t) return withAuth({ status: 404, data: {} }, auth)
+      return withAuth({
+        data: { post: t.post ?? t, replies: r?.replies ?? [] },
+      }, auth)
     }
     case 'feed': {
-      // 原样透传 API 信封({posts,next_cursor})——客户端重取同一路径拿到的是同一形状,
-      // 页面层直接读 .posts/.next_cursor,不需要 unwrap。
-      const [r, stats] = await Promise.all([
+      // 原样透传 API 信封({posts,next_cursor})——客户端重取同一路径拿到的是同一形状。
+      const [auth, r, stats] = await Promise.all([
+        fetchAuth(client),
         client.tryGet('/api/posts?limit=20'),
         client.tryGet('/api/stats'),
       ])
-      return withAuth({ data: { posts: r ?? { posts: [], next_cursor: null }, stats: stats ?? null } })
+      return withAuth({
+        data: { posts: r ?? { posts: [], next_cursor: null }, stats: stats ?? null },
+      }, auth)
     }
     case 'explore': {
-      const [r, stats] = await Promise.all([
+      const [auth, r, stats] = await Promise.all([
+        fetchAuth(client),
         // B2:探索默认「热门」(trending);「最新」由客户端切换取数
         client.tryGet('/api/projects?sort=trending&limit=20'),
         client.tryGet('/api/stats'),
       ])
-      return withAuth({ data: { projects: r ?? { projects: [], next_cursor: null }, stats: stats ?? null } })
+      return withAuth({
+        data: { projects: r ?? { projects: [], next_cursor: null }, stats: stats ?? null },
+      }, auth)
     }
     case 'home': {
       // 讨论区与 DiscussionPreview 客户端重取同路径:/api/posts?limit=8(全类型最新)。
       // 旧实现只拉 type=discuss|ask 再合并——真实内容大量是 show/build,硬刷新会注入
       // posts:[] ,而 useApiData 见到已定义的 SSR 值就不再客户端补取,首页讨论区永久空态。
-      const [posts, proj, stats, weeklyLatest] = await Promise.all([
+      const [auth, posts, proj, stats, weeklyLatest] = await Promise.all([
+        fetchAuth(client),
         client.tryGet('/api/posts?limit=8'),
         // B2:首页焦点 = trending(近 7 天回复热度)前 5
         client.tryGet('/api/projects?sort=trending&limit=5'),
@@ -173,24 +215,34 @@ async function prefetch(plan, client) {
           stats: stats ?? null,
           weekly_latest: weeklyLatest ?? null,
         },
-      })
+      }, auth)
     }
     case 'weekly': {
       // 路由只有周号(/weekly/:weekNumber,C 阶段冻结);年份取当前 ISO 年——
       // 首批期刊都在同一年,跨年后再扩路由。未发布/不存在 → null,页面走 comingSoon 空态。
       const year = new Date().getFullYear()
-      const w = await client.tryGet(`/api/weekly/${year}/${encodeURIComponent(plan.week)}`)
-      return withAuth({ data: { weekly: w ?? null } })
+      const [auth, w] = await Promise.all([
+        fetchAuth(client),
+        client.tryGet(`/api/weekly/${year}/${encodeURIComponent(plan.week)}`),
+      ])
+      return withAuth({ data: { weekly: w ?? null } }, auth)
     }
     case 'notifications': {
       // 登录 cookie 已随 client 透传;匿名时 API 401,tryGet 吞掉返回 null → 页面走 LoginPrompt。
-      const r = await client.tryGet('/api/notifications')
-      return withAuth({ data: { notifications: r ?? null } })
+      const [auth, r] = await Promise.all([
+        fetchAuth(client),
+        client.tryGet('/api/notifications'),
+      ])
+      return withAuth({ data: { notifications: r ?? null } }, auth)
     }
-    case 'notfound':
-      return withAuth({ status: 404, data: {} })
-    default:
-      return withAuth({ data: {} })
+    case 'notfound': {
+      const auth = await fetchAuth(client)
+      return withAuth({ status: 404, data: {} }, auth)
+    }
+    default: {
+      const auth = await fetchAuth(client)
+      return withAuth({ data: {} }, auth)
+    }
   }
 }
 

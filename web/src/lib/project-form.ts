@@ -242,6 +242,17 @@ export function firstInvalidFieldId(errors: DraftErrors, slugError?: FieldError)
   return collectFieldErrors(errors, slugError)[0]?.id ?? null
 }
 
+/** 双 rAF 后再 focus——等 showErrors 触发的重绘完成,否则首错节点可能尚未带 error 样式/存在。 */
+export function scheduleFocusProjectField(errors: DraftErrors, slugError?: FieldError): void {
+  if (typeof window === 'undefined') return
+  const id = firstInvalidFieldId(errors, slugError)
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      focusProjectField(id)
+    })
+  })
+}
+
 /** 提交失败后:滚到首个错误并尽量 focus 可编辑控件。 */
 export function focusProjectField(fieldId: string | null): void {
   if (!fieldId || typeof document === 'undefined') return
