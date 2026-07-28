@@ -17,6 +17,8 @@ interface ProjectListItemProps {
   deck?: string;
   latestThread?: LatestThread;
   showDeck?: boolean;
+  /** 主人下架/软隐藏标记 */
+  hidden?: boolean;
 }
 
 // 杂志目录行(画布 3a):mono 双位编号列 + serif 17px 标题 + dot leaders + mono 右列,
@@ -33,10 +35,11 @@ export default function ProjectListItem({
   deck,
   latestThread,
   showDeck = false,
+  hidden = false,
 }: ProjectListItemProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex gap-4 py-[22px] border-b border-background-100 last:border-b-0">
+    <div className={`flex gap-4 py-[22px] border-b border-background-100 last:border-b-0 ${hidden ? 'opacity-80' : ''}`}>
       <span
         className={`shrink-0 w-[34px] text-right font-mono text-sm ${
           trending ? 'text-accent-500' : 'text-foreground-300'
@@ -66,6 +69,11 @@ export default function ProjectListItem({
             @{authorHandle}
           </Link>
           <StageBadge stage={stage} className="!text-[10px] !px-[7px] !py-[1px]" />
+          {hidden && (
+            <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-xs bg-secondary-100 text-secondary-800">
+              {t('project.hiddenBadge')}
+            </span>
+          )}
         </div>
 
         {showDeck && deck && (

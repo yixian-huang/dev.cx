@@ -51,6 +51,8 @@ export interface ExploreProject {
   hasFeedbackRequest: boolean;
   // API 列表响应无项目级"最新讨论"聚合 —— 中性 undefined,不编造空壳对象(C2 评审 Finding I2)。
   latestThread?: LatestThread;
+  /** 主人软隐藏/下架 */
+  hidden?: boolean;
 }
 
 // ── project shapes ──
@@ -96,6 +98,8 @@ export interface UIProject {
   // undefined = 匿名(接口不带该键);登录态为真实布尔
   viewerFollowing?: boolean;
   isOwner: boolean;
+  /** 主人软隐藏/下架 */
+  hidden?: boolean;
 }
 
 // DiscussTab 的 prop 契约(带 mergedFrom/mergedInto/feedbackType 等合并溯源与反馈分类字段)——

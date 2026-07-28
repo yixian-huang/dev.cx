@@ -35,7 +35,7 @@ left join lateral (
 // projectListSelect 返回列表 select 列：project 行 + heat / feedback / latest_post 聚合。
 func projectListSelect() string {
 	return `p.id, p.slug, p.owner_id, p.name, p.tagline, p.description_md, p.stage, p.audience,
-	p.screenshots, p.tags, p.links, p.created_at, p.updated_at,
+	p.screenshots, p.tags, p.links, p.created_at, p.updated_at, p.hidden_at,
 	` + projectHeatSQL("p.id") + ` as reply_count_7d,
 	exists(
 		select 1 from posts fp
@@ -53,7 +53,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	if err := s.deps.Pool.QueryRow(ctx, `
 		select
 		  (select count(*)::int from users),
-		  (select count(*)::int from projects),
+		  (select count(*)::int from projects where hidden_at is null),
 		  (select count(*)::int from posts where merged_into is null and hidden_at is null
 		     and status = 'published')`).
 		Scan(&builders, &products, &discussions); err != nil {

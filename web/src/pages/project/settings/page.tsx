@@ -7,7 +7,7 @@ import { useApiData } from '@/lib/use-api-data';
 import { createClient, type ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-errors';
 import { unwrap, type ApiProject } from '@/lib/adapters/api-types';
-import { updateProject } from '@/lib/actions';
+import { hideProject, unhideProject, updateProject } from '@/lib/actions';
 import {
   type ProjectDraft,
   type DraftErrors,
@@ -56,6 +56,13 @@ export default function ProjectSettingsPage() {
   const [saving, setSaving] = useState(false);
   // 非 401 的写失败内联展示(spec §3 约定,Task 7 先例),不吞、不用 toast。
   const [saveError, setSaveError] = useState<string | undefined>(undefined);
+  const [hidden, setHidden] = useState(Boolean(apiProject?.hidden));
+  const [hiding, setHiding] = useState(false);
+  const [hideError, setHideError] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (apiProject) setHidden(Boolean(apiProject.hidden));
+  }, [apiProject?.id, apiProject?.hidden]);
 
   const errors = useMemo(() => validateDraft(draft), [draft]);
 
@@ -99,6 +106,26 @@ export default function ProjectSettingsPage() {
     }
   }, [id, draft, initial, errors, navigate]);
 
+  const handleToggleHidden = useCallback(async () => {
+    if (!id || hiding) return;
+    setHideError(undefined);
+    setHiding(true);
+    try {
+      const client = createClient({ baseURL: '' });
+      const result = hidden ? await unhideProject(client, id) : await hideProject(client, id);
+      setHidden(Boolean(result.hidden));
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.status === 401) {
+        navigate('/login');
+        return;
+      }
+      setHideError(apiErrorMessage(e));
+    } finally {
+      setHiding(false);
+    }
+  }, [id, hidden, hiding, navigate]);
+
   return (
     <PageShell pageEnter>
       {/* Header */}
@@ -118,6 +145,44 @@ export default function ProjectSettingsPage() {
           </p>
         </div>
       </header>
+
+      {/* 可见性:软隐藏/下架 */}
+      <section className="mb-8 rounded-xs border border-foreground-200/40 px-4 py-4">
+        <div className="font-mono text-[11px] tracking-[0.2em] text-foreground-400 uppercase mb-2">
+          {t('project.visibilitySection')}
+        </div>
+        <p className="text-[13px] text-foreground-700 leading-relaxed">
+          {hidden ? t('project.hiddenHelp') : t('project.publicHelp')}
+        </p>
+        {hideError && (
+          <p role="alert" className="mt-2 text-[13px] text-primary-700">
+            {hideError}
+          </p>
+        )}
+        <div className="mt-3 flex items-center gap-3 flex-wrap">
+          <span
+            className={`inline-flex px-2 py-0.5 text-[11px] font-medium rounded-xs ${
+              hidden
+                ? 'bg-secondary-100 text-secondary-800'
+                : 'bg-primary-100 text-primary-700'
+            }`}
+          >
+            {hidden ? t('project.hiddenBadge') : t('project.publicBadge')}
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleToggleHidden()}
+            disabled={hiding}
+            className="inline-flex items-center px-3 py-1.5 text-[13px] font-medium border border-foreground-200/50 text-foreground-800 hover:bg-background-100 rounded-xs transition-colors duration-200 cursor-pointer disabled:opacity-40 bg-transparent"
+          >
+            {hiding
+              ? t('project.visibilityWorking')
+              : hidden
+                ? t('project.unhideAction')
+                : t('project.hideAction')}
+          </button>
+        </div>
+      </section>
 
       <ProjectFormFields
         draft={draft}

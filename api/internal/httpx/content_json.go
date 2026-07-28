@@ -14,6 +14,8 @@ type projectRow struct {
 	Audience, Screenshots, Tags []string
 	Links                       []map[string]string
 	CreatedAt, UpdatedAt        time.Time
+	// 0016 软隐藏:非 nil = 对访客下架;作者仍可见/可恢复。
+	HiddenAt *time.Time
 }
 
 type postRow struct {
@@ -40,7 +42,7 @@ type replyRow struct {
 }
 
 const projectCols = `id, slug, owner_id, name, tagline, description_md, stage, audience,
-	screenshots, tags, links, created_at, updated_at`
+	screenshots, tags, links, created_at, updated_at, hidden_at`
 
 const postCols = `id, slug, author_id, project_id, type, title, body_md, status,
 	feedback_wanted, uncertainties, links, merged_into, created_at, updated_at, published_at, merged_at, hidden_at, hidden_reason`
@@ -57,7 +59,7 @@ func scanProject(row pgx.Row) (projectRow, error) {
 	var p projectRow
 	var raw []byte
 	err := row.Scan(&p.ID, &p.Slug, &p.OwnerID, &p.Name, &p.Tagline, &p.DescriptionMD,
-		&p.Stage, &p.Audience, &p.Screenshots, &p.Tags, &raw, &p.CreatedAt, &p.UpdatedAt)
+		&p.Stage, &p.Audience, &p.Screenshots, &p.Tags, &raw, &p.CreatedAt, &p.UpdatedAt, &p.HiddenAt)
 	if err != nil {
 		return p, err
 	}
@@ -80,7 +82,7 @@ func scanProjectList(row pgx.Row) (projectRow, projectListAgg, error) {
 	var a projectListAgg
 	var raw []byte
 	err := row.Scan(&p.ID, &p.Slug, &p.OwnerID, &p.Name, &p.Tagline, &p.DescriptionMD,
-		&p.Stage, &p.Audience, &p.Screenshots, &p.Tags, &raw, &p.CreatedAt, &p.UpdatedAt,
+		&p.Stage, &p.Audience, &p.Screenshots, &p.Tags, &raw, &p.CreatedAt, &p.UpdatedAt, &p.HiddenAt,
 		&a.ReplyCount7d, &a.HasFeedbackRequest,
 		&a.LatestSlug, &a.LatestTitle, &a.LatestReplyCount)
 	if err != nil {
@@ -198,6 +200,10 @@ func (s *Server) projectJSON(ctx context.Context, p projectRow, withStats bool, 
 		"screenshots": emptyIfNil(p.Screenshots), "tags": emptyIfNil(p.Tags),
 		"links": p.Links, "author": s.authorJSON(ctx, p.OwnerID),
 		"created_at": p.CreatedAt, "updated_at": p.UpdatedAt,
+		"hidden": p.HiddenAt != nil,
+	}
+	if p.HiddenAt != nil {
+		out["hidden_at"] = p.HiddenAt.UTC().Format(time.RFC3339)
 	}
 	if withStats && s.deps.Pool != nil {
 		var timeline, discuss, feedback int

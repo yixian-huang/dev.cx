@@ -48,6 +48,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/projects", s.handleListProjects)
 	s.mux.HandleFunc("GET /api/projects/{slug}", s.handleGetProject)
 	s.mux.HandleFunc("PATCH /api/projects/{slug}", s.handlePatchProject)
+	s.mux.HandleFunc("POST /api/projects/{slug}/hide", s.handleHideProject)
+	s.mux.HandleFunc("DELETE /api/projects/{slug}/hide", s.handleUnhideProject)
 	s.mux.HandleFunc("GET /api/users/{handle}/projects", s.handleListUserProjects)
 	s.mux.HandleFunc("GET /api/projects/{slug}/timeline", s.handleProjectTimeline)
 	s.mux.HandleFunc("POST /api/projects/{slug}/feedback", s.handleProjectFeedback)

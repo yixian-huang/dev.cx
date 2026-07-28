@@ -30,6 +30,7 @@ func AssembleHighlights(ctx context.Context, q db.Querier, year, week int) ([]Hi
 		` + projectHeatSQL("p.id") + ` as heat
 		from projects p
 		join users u on u.id = p.owner_id
+		where p.hidden_at is null
 		order by heat desc, p.updated_at desc
 		limit 4`
 	prows, err := q.Query(ctx, projSQL)

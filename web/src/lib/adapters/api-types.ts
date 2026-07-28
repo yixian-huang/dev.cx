@@ -62,6 +62,9 @@ export type ApiProject = {
   reply_count_7d?: number;
   has_feedback_request?: boolean;
   latest_post?: { slug: string; title: string; reply_count: number } | null;
+  /** 0016 软隐藏:true = 已下架;仅主人列表/详情会带 true */
+  hidden?: boolean;
+  hidden_at?: string | null;
 };
 
 export interface StatsEnvelope {

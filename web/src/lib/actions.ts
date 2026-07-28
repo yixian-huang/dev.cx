@@ -117,6 +117,23 @@ export async function updateProject(
   await c.patch(`/api/projects/${slug}`, patch)
 }
 
+/** 主人软隐藏/下架产品（探索与访客不可见）。 */
+export async function hideProject(c: ApiClient, slug: string): Promise<{ hidden: boolean }> {
+  const r = await c.post<{ project: { hidden?: boolean } }>(
+    `/api/projects/${encodeURIComponent(slug)}/hide`,
+    {},
+  )
+  return { hidden: Boolean(r.project?.hidden) }
+}
+
+/** 主人恢复公开展示。 */
+export async function unhideProject(c: ApiClient, slug: string): Promise<{ hidden: boolean }> {
+  const r = await c.del<{ project: { hidden?: boolean } }>(
+    `/api/projects/${encodeURIComponent(slug)}/hide`,
+  )
+  return { hidden: Boolean(r.project?.hidden) }
+}
+
 export async function submitFeedback(
   c: ApiClient,
   slug: string,

@@ -54,9 +54,26 @@ export default function ProjectHeader({ project }: Props) {
         <p className="mt-2.5 text-[15px] leading-[1.8] text-foreground-700 max-w-[36em] line-clamp-2">{project.tagline}</p>
       )}
 
+      {project.isOwner && project.hidden && (
+        <div className="mt-3 px-3 py-2 bg-background-100 border border-foreground-200/40 rounded-xs text-[13px] text-foreground-700 leading-relaxed">
+          {t('project.hiddenOwnerBanner')}{' '}
+          <Link
+            to={`/p/${project.id}/settings`}
+            className="text-primary-600 hover:text-primary-500 underline-offset-2 hover:underline"
+          >
+            {t('project.manageVisibility')}
+          </Link>
+        </div>
+      )}
+
       {/* meta 行:阶段徽章 + 受众字标 + 求反馈朱砂点 + 更新时间 + 立项年月 */}
       <div className="flex items-center gap-3 mt-3.5 text-xs flex-wrap">
         <StageBadge stage={project.stage} />
+        {project.hidden && (
+          <span className="inline-flex px-2 py-0.5 text-[11px] font-medium rounded-xs bg-secondary-100 text-secondary-800 whitespace-nowrap">
+            {t('project.hiddenBadge')}
+          </span>
+        )}
         {project.audience.map((aud) => (
           <span
             key={aud}

@@ -48,6 +48,7 @@ export function adaptProject(p: ApiProject, opts?: { isOwner?: boolean }): UIPro
     followerCount: p.follower_count ?? 0,
     viewerFollowing: p.viewer_following,
     isOwner: opts?.isOwner ?? false,
+    hidden: Boolean(p.hidden),
   }
 }
 
@@ -71,5 +72,6 @@ export function adaptExploreProject(p: ApiProject): ExploreProject {
     latestThread: p.latest_post
       ? { id: p.latest_post.slug, title: p.latest_post.title, replyCount: p.latest_post.reply_count, time: '', recencyScore: 0, viewCount: 0 }
       : undefined,
+    hidden: Boolean(p.hidden),
   }
 }

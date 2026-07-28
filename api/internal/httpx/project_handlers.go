@@ -161,7 +161,68 @@ func (s *Server) writeProjectBySlug(w http.ResponseWriter, r *http.Request, slug
 		Err(w, 404, "not_found")
 		return
 	}
-	WriteJSON(w, code, map[string]any{"project": s.projectJSON(ctx, p, true, currentUserID(r))})
+	viewer := currentUserID(r)
+	// 软隐藏:访客/非主人当 404;主人与创建成功响应仍可读。
+	if p.HiddenAt != nil && viewer != p.OwnerID && code != http.StatusCreated {
+		Err(w, 404, "not_found")
+		return
+	}
+	WriteJSON(w, code, map[string]any{"project": s.projectJSON(ctx, p, true, viewer)})
+}
+
+// handleHideProject 主人下架产品(软隐藏):探索/他人主页/统计不可见;本人仍可见可恢复。
+func (s *Server) handleHideProject(w http.ResponseWriter, r *http.Request) {
+	s.setProjectHidden(w, r, true)
+}
+
+// handleUnhideProject 主人恢复公开展示。
+func (s *Server) handleUnhideProject(w http.ResponseWriter, r *http.Request) {
+	s.setProjectHidden(w, r, false)
+}
+
+func (s *Server) setProjectHidden(w http.ResponseWriter, r *http.Request, hide bool) {
+	uid := currentUserID(r)
+	if uid == "" {
+		Err(w, 401, "auth_required")
+		return
+	}
+	if !s.writeGate(w, r, uid) {
+		return
+	}
+	slug := strings.ToLower(r.PathValue("slug"))
+	ctx := r.Context()
+	p, err := scanProject(s.deps.Pool.QueryRow(ctx,
+		`select `+projectCols+` from projects where slug=$1`, slug))
+	if err != nil {
+		Err(w, 404, "not_found")
+		return
+	}
+	if p.OwnerID != uid {
+		Err(w, 403, "forbidden")
+		return
+	}
+	var execErr error
+	if hide {
+		if p.HiddenAt != nil {
+			// 幂等:已隐藏直接返回当前状态
+			WriteJSON(w, 200, map[string]any{"project": s.projectJSON(ctx, p, true, uid)})
+			return
+		}
+		_, execErr = s.deps.Pool.Exec(ctx,
+			`update projects set hidden_at=now(), updated_at=now() where id=$1`, p.ID)
+	} else {
+		if p.HiddenAt == nil {
+			WriteJSON(w, 200, map[string]any{"project": s.projectJSON(ctx, p, true, uid)})
+			return
+		}
+		_, execErr = s.deps.Pool.Exec(ctx,
+			`update projects set hidden_at=null, updated_at=now() where id=$1`, p.ID)
+	}
+	if execErr != nil {
+		Err(w, 500, "internal")
+		return
+	}
+	s.writeProjectBySlug(w, r, slug, http.StatusOK)
 }
 
 func (s *Server) handlePatchProject(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +322,8 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	trending := q.Get("sort") == "trending"
-	where := []string{"true"}
+	// 公开探索/首页焦点:不下架产品不进列表。
+	where := []string{"p.hidden_at is null"}
 	args := []any{}
 	// trending 无 keyset 语义，忽略 cursor。
 	if !trending {
@@ -324,8 +386,14 @@ func (s *Server) handleListUserProjects(w http.ResponseWriter, r *http.Request) 
 		Err(w, 404, "not_found")
 		return
 	}
+	// 本人看自己主页/「我的产品」:含下架项;访客只看公开产品。
+	viewer := currentUserID(r)
+	whereOwner := `p.owner_id=$1`
+	if viewer != uid {
+		whereOwner += ` and p.hidden_at is null`
+	}
 	sql := `select ` + projectListSelect() + ` ` + projectListFrom() +
-		` where p.owner_id=$1 order by p.updated_at desc limit 50`
+		` where ` + whereOwner + ` order by p.updated_at desc limit 50`
 	rows, err := s.deps.Pool.Query(ctx, sql, uid)
 	if err != nil {
 		Err(w, 500, "internal")
@@ -333,7 +401,6 @@ func (s *Server) handleListUserProjects(w http.ResponseWriter, r *http.Request) 
 	}
 	defer rows.Close()
 	out := []map[string]any{}
-	viewer := currentUserID(r)
 	for rows.Next() {
 		p, agg, err := scanProjectList(rows)
 		if err != nil {
@@ -353,10 +420,15 @@ func (s *Server) handleListUserProjects(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleProjectTimeline(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	var pid string
+	var pid, owner string
+	var hiddenAt *time.Time
 	if err := s.deps.Pool.QueryRow(ctx,
-		`select id from projects where slug=$1`,
-		strings.ToLower(r.PathValue("slug"))).Scan(&pid); err != nil {
+		`select id, owner_id, hidden_at from projects where slug=$1`,
+		strings.ToLower(r.PathValue("slug"))).Scan(&pid, &owner, &hiddenAt); err != nil {
+		Err(w, 404, "not_found")
+		return
+	}
+	if hiddenAt != nil && currentUserID(r) != owner {
 		Err(w, 404, "not_found")
 		return
 	}
@@ -417,10 +489,16 @@ func (s *Server) handleProjectFeedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	var pid string
+	var pid, owner string
+	var hiddenAt *time.Time
 	if err := s.deps.Pool.QueryRow(ctx,
-		`select id from projects where slug=$1`,
-		strings.ToLower(r.PathValue("slug"))).Scan(&pid); err != nil {
+		`select id, owner_id, hidden_at from projects where slug=$1`,
+		strings.ToLower(r.PathValue("slug"))).Scan(&pid, &owner, &hiddenAt); err != nil {
+		Err(w, 404, "not_found")
+		return
+	}
+	// 下架产品:访客不可投反馈(与详情/时间线一致);主人仍可自测路径。
+	if hiddenAt != nil && uid != owner {
 		Err(w, 404, "not_found")
 		return
 	}

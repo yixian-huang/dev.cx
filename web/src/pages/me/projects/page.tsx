@@ -84,6 +84,7 @@ export default function MyProjectsPage() {
               deck={proj.deck}
               latestThread={proj.latestThread}
               showDeck
+              hidden={proj.hidden}
             />
           ))}
         </div>
