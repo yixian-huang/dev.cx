@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import MarkdownEditor from './MarkdownEditor';
+import { useAuth } from '@/hooks/useAuth';
 import { useMyProjects } from '@/hooks/useMyProjects';
 import { createClient, type ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-errors';
@@ -57,7 +58,9 @@ export default function UnifiedEditor({
 }: UnifiedEditorProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const myProjects = useMyProjects();
+  const emailVerified = user?.emailVerified !== false;
 
   const [postType, setPostType] = useState<PostType>(seed?.type ?? initialType);
   const [projectId, setProjectId] = useState(seed?.project_slug ?? lockedProjectId ?? '');
@@ -181,12 +184,35 @@ export default function UnifiedEditor({
 
   // show/build 必须挂靠已有产品(api handleCreatePost 的 project_required);discuss 可独立。
   const needsProject = postType === 'show' || postType === 'build';
-  const canPublish =
-    title.trim().length > 0 && body.trim().length > 0 && (!needsProject || projectId.trim().length > 0) && !publishing;
+  // 表单是否齐备——仅作样式提示;真正拦截在 handleSubmit 里给出可理解的错误文案。
+  // 旧逻辑 disabled={!canPublish} 会让「未选产品 / 未验证邮箱」时点击完全无反应。
+  const formReady =
+    title.trim().length > 0 &&
+    body.trim().length > 0 &&
+    (!needsProject || projectId.trim().length > 0) &&
+    emailVerified;
 
   const handleSubmit = useCallback(async () => {
-    if (!canPublish) return;
+    if (publishing) return;
     setPublishError(undefined);
+    if (!emailVerified) {
+      setPublishError(t('compose.needEmailVerify'));
+      return;
+    }
+    if (!title.trim()) {
+      setPublishError(t('compose.needTitle'));
+      return;
+    }
+    if (!body.trim()) {
+      setPublishError(t('compose.needBody'));
+      return;
+    }
+    if (needsProject && !projectId.trim()) {
+      setPublishError(
+        myProjects.length === 0 ? t('compose.needProjectCreateFirst') : t('compose.needProjectToPublish'),
+      );
+      return;
+    }
     setPublishing(true);
     try {
       const client = createClient({ baseURL: '' });
@@ -219,7 +245,23 @@ export default function UnifiedEditor({
     } finally {
       setPublishing(false);
     }
-  }, [canPublish, postType, projectId, title, body, feedback, draftSlug, navigate, onPublished, editMode, editSlug]);
+  }, [
+    publishing,
+    emailVerified,
+    needsProject,
+    myProjects.length,
+    postType,
+    projectId,
+    title,
+    body,
+    feedback,
+    draftSlug,
+    navigate,
+    onPublished,
+    editMode,
+    editSlug,
+    t,
+  ]);
 
   const selectedProject = myProjects.find((p) => p.id === projectId);
   const presetChips = PRESET_CHIP_KEYS.map((k) => t(k));
@@ -284,11 +326,21 @@ export default function UnifiedEditor({
                 </button>
               )}
               {myProjects.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-foreground-400">{t('compose.noProjectMatch')}</div>
+                <div className="px-3 py-2.5 space-y-1.5">
+                  <p className="text-xs text-foreground-400">{t('compose.noProjectsYet')}</p>
+                  <Link
+                    to="/new"
+                    className="block text-[13px] text-primary-600 hover:text-primary-500"
+                    onClick={() => setProjectOpen(false)}
+                  >
+                    {t('compose.createProjectFirst')}
+                  </Link>
+                </div>
               ) : (
                 myProjects.map((p) => (
                   <button
                     key={p.id}
+                    type="button"
                     onClick={() => { setProjectId(p.id); setProjectOpen(false); trigger(); }}
                     className={`w-full text-left px-3 py-2 text-[13px] hover:bg-background-100 transition-colors duration-150 cursor-pointer ${
                       p.id === projectId ? 'text-foreground-950 font-medium' : 'text-foreground-700'
@@ -302,6 +354,21 @@ export default function UnifiedEditor({
           )}
         </div>
       </div>
+
+      {needsProject && myProjects.length === 0 && (
+        <div className="mt-4 px-3.5 py-3 bg-background-100 border border-foreground-200/40 rounded-xs text-[13px] text-foreground-700 leading-relaxed">
+          {t('compose.noProjectsYet')}{' '}
+          <Link to="/new" className="text-primary-600 hover:text-primary-500 underline-offset-2 hover:underline">
+            {t('compose.createProjectFirst')}
+          </Link>
+        </div>
+      )}
+
+      {!emailVerified && (
+        <div className="mt-4 px-3.5 py-3 bg-accent-100/50 border border-accent-500/30 rounded-xs text-[13px] text-foreground-700 leading-relaxed">
+          {t('compose.needEmailVerify')}
+        </div>
+      )}
 
       {/* 标题 */}
       <div className="pt-5">
@@ -372,7 +439,17 @@ export default function UnifiedEditor({
       </div>
 
       {(publishError || draftError) && (
-        <p className="text-[13px] text-primary-700 mt-4">{publishError || draftError}</p>
+        <p role="alert" className="text-[13px] text-primary-700 mt-4 leading-relaxed">
+          {publishError || draftError}
+          {publishError === t('compose.needProjectCreateFirst') && (
+            <>
+              {' '}
+              <Link to="/new" className="underline underline-offset-2 hover:text-primary-600">
+                {t('compose.createProjectFirst')}
+              </Link>
+            </>
+          )}
+        </p>
       )}
 
       {/* 动作行 */}
@@ -392,8 +469,10 @@ export default function UnifiedEditor({
         <button
           type="button"
           onClick={() => void handleSubmit()}
-          disabled={!canPublish}
-          className="inline-flex items-center px-5 py-2 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer"
+          disabled={publishing}
+          className={`inline-flex items-center px-5 py-2 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer ${
+            !formReady && !publishing ? 'opacity-70' : ''
+          }`}
         >
           {publishing
             ? t('compose.publishing')

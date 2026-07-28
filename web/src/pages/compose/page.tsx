@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MobileTabs from '@/components/feature/MobileTabs';
+import VerifyBanner from '@/components/feature/VerifyBanner';
 import LoginPrompt from '@/components/base/LoginPrompt';
 import ChapterLabel from '@/components/base/ChapterLabel';
 import { createClient, type ApiError } from '@/lib/api';
@@ -195,6 +196,7 @@ export default function ComposePage() {
       return (
         <div className="min-h-screen bg-background-50">
           <Navbar />
+          <VerifyBanner />
           <main className="pt-14 pb-14 md:pb-0 page-enter">
             <div className="max-w-[640px] mx-auto px-6">
               <div className="py-20 text-center fade-in-up">
@@ -239,6 +241,7 @@ export default function ComposePage() {
     return (
       <div className="min-h-screen bg-background-50">
         <Navbar />
+        <VerifyBanner />
         <main className="pt-14 pb-14 md:pb-0 page-enter">
           <div className="max-w-[640px] mx-auto px-6">
             <header className="py-8 pb-4">
@@ -280,6 +283,7 @@ export default function ComposePage() {
   return (
     <div className="min-h-screen bg-background-50">
       <Navbar />
+      <VerifyBanner />
 
       <main className="pt-14 pb-14 md:pb-0 page-enter">
         <div className="max-w-[640px] mx-auto px-6">

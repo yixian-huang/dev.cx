@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MobileTabs from '@/components/feature/MobileTabs';
+import VerifyBanner from '@/components/feature/VerifyBanner';
 import SiteMasthead from './components/SiteMasthead';
 import FocusWorks from './components/FocusWorks';
 import DiscussionPreview from './components/DiscussionPreview';
@@ -36,6 +37,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background-50">
       <Navbar />
+      <VerifyBanner />
       <main className="pt-14 pb-14 md:pb-0 page-enter">
         <SiteMasthead compact={compact} stats={stats} weekly={weeklyLatest ?? undefined} />
         <FocusWorks compact={compact} totalProducts={stats?.products} />
