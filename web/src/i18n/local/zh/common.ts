@@ -323,6 +323,11 @@ const common: Record<string, string> = {
   "admin.invitesNotePlaceholder": "批次备注（如 w32-batch）",
   "admin.invitesMint": "造码",
   "admin.invitesVoid": "作废",
+  "admin.invitesLinkHint": "把注册链接发给对方即可；打开后会自动填入邀请码（/onboarding?code=…）。",
+  "admin.invitesFreshTitle": "刚生成的邀请（复制链接发给对方）",
+  "admin.invitesCopyLink": "复制链接",
+  "admin.invitesCopyAllLinks": "复制全部链接",
+  "admin.invitesLinkCopied": "已复制",
   "admin.waitlistCount": "候补名单",
 
   // Onboarding(注册单屏:只收账号四件套;字段类 key 与 /me/profile、/new-project 复用)

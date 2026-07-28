@@ -326,6 +326,11 @@ const common: Record<string, string> = {
   "admin.invitesNotePlaceholder": "Batch note (e.g. w32-batch)",
   "admin.invitesMint": "Mint",
   "admin.invitesVoid": "Void",
+  "admin.invitesLinkHint": "Share the register link; it opens onboarding with the invite code filled in (/onboarding?code=…).",
+  "admin.invitesFreshTitle": "Just minted (copy links to share)",
+  "admin.invitesCopyLink": "Copy link",
+  "admin.invitesCopyAllLinks": "Copy all links",
+  "admin.invitesLinkCopied": "Copied",
   "admin.waitlistCount": "Waitlist",
 
   // Onboarding
