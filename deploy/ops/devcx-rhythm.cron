@@ -1,0 +1,1 @@
+0 9 * * 1 root /opt/devcx/bin/devcx-rhythm.sh >> /opt/devcx/backup/rhythm.log 2>&1

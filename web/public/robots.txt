@@ -1,0 +1,14 @@
+User-agent: *
+Disallow: /me
+Disallow: /notifications
+Disallow: /compose
+Disallow: /new
+Disallow: /new-project
+Disallow: /onboarding
+Disallow: /login
+Disallow: /admin
+Disallow: /verify-email
+Disallow: /reset-password
+Disallow: /p/*/settings
+
+Sitemap: https://dev.cx/sitemap.xml

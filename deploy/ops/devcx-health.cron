@@ -1,0 +1,1 @@
+*/15 * * * * root /opt/devcx/bin/devcx-health.sh >> /opt/devcx/backup/health.log 2>&1

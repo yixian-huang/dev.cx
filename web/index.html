@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- seo-fallback 块:仅在 SSR 降级(shell 兜底)与纯 vite dev 下生效;正常 SSR 渲染时
+         server.mjs 会整段剔除,由 <!--app-head--> 注入的每页动态 head 作为唯一来源——
+         否则每页两个 <title>/canonical,且静态 canonical 恒指首页,搜索引擎会把全站归并到首页。 -->
+    <!--seo-fallback-start-->
+    <title>dev.cx — 产品驱动的创造者社区</title>
+    <meta name="description" content="dev.cx 是产品驱动的创造者社区：每个创造者有一份持续更新的公共档案，讨论锚定在产品上。不限制工具，不区分身份——重要的是你在创造。" />
+    <!--seo-fallback-end-->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+    <!--app-head-->
+  </head>
+  <body>
+    <div id="root"><!--app-html--></div>
+    <!--app-data-->
+    <script type="module" src="/src/entry-client.tsx"></script>
+  </body>
+</html>

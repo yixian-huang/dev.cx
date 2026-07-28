@@ -1,0 +1,484 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root, html[data-theme="warm"] {
+  /* ── Cream Paper (background) — barely-warm, inviting ── */
+  --background-50: 0.982 0.005 88;
+  --background-100: 0.968 0.006 88;
+  --background-200: 0.950 0.007 88;
+  --background-300: 0.925 0.008 88;
+  --background-400: 0.88 0.008 88;
+  --background-500: 0.80 0.008 88;
+  --background-600: 0.70 0.007 88;
+  --background-700: 0.58 0.006 88;
+  --background-800: 0.44 0.005 88;
+  --background-900: 0.29 0.004 88;
+  --background-950: 0.17 0.003 88;
+
+  /* ── Sumi Ink (primary) — deep warm charcoal, like printing ink on cream paper ── */
+  --primary-50: 0.975 0.003 75;
+  --primary-100: 0.94 0.005 75;
+  --primary-200: 0.88 0.008 75;
+  --primary-300: 0.74 0.010 75;
+  --primary-400: 0.56 0.012 75;
+  --primary-500: 0.28 0.014 72;
+  --primary-600: 0.22 0.012 72;
+  --primary-700: 0.17 0.010 72;
+  --primary-800: 0.12 0.008 72;
+  --primary-900: 0.08 0.005 72;
+  --primary-950: 0.04 0.003 72;
+
+  /* ── Vermilion Seal (accent) — muted warm red, like a calligraphy seal stamp. Rare, deliberate ── */
+  --accent-50: 0.975 0.008 22;
+  --accent-100: 0.935 0.015 22;
+  --accent-200: 0.875 0.028 22;
+  --accent-300: 0.75 0.050 22;
+  --accent-400: 0.58 0.080 22;
+  --accent-500: 0.46 0.105 22;
+  --accent-600: 0.38 0.088 22;
+  --accent-700: 0.28 0.068 22;
+  --accent-800: 0.20 0.048 22;
+  --accent-900: 0.14 0.032 22;
+  --accent-950: 0.08 0.018 22;
+
+  /* ── Rice Paper Gray (secondary) — soft warm neutrals for chips, tags, filters ── */
+  --secondary-50: 0.978 0.003 80;
+  --secondary-100: 0.94 0.005 80;
+  --secondary-200: 0.88 0.006 80;
+  --secondary-300: 0.78 0.007 80;
+  --secondary-400: 0.66 0.008 80;
+  --secondary-500: 0.56 0.008 80;
+  --secondary-600: 0.48 0.007 80;
+  --secondary-700: 0.40 0.006 80;
+  --secondary-800: 0.30 0.005 80;
+  --secondary-900: 0.22 0.004 80;
+  --secondary-950: 0.14 0.003 80;
+
+  /* ── Warm Ink (foreground) — near-black with the barest warmth ── */
+  --foreground-50: 0.978 0.004 80;
+  --foreground-100: 0.945 0.005 80;
+  --foreground-200: 0.885 0.005 80;
+  --foreground-300: 0.76 0.005 80;
+  --foreground-400: 0.63 0.005 80;
+  --foreground-500: 0.53 0.005 80;
+  --foreground-600: 0.43 0.005 80;
+  --foreground-700: 0.35 0.005 80;
+  --foreground-800: 0.25 0.005 80;
+  --foreground-900: 0.16 0.005 80;
+  --foreground-950: 0.10 0.005 80;
+
+  /* ── Typography ── */
+  --font-display: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-heading: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-label: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+}
+
+/* ── Light Theme: Pure White ── */
+html[data-theme="light"] {
+  --background-50: 0.995 0.001 260;
+  --background-100: 0.975 0.001 260;
+  --background-200: 0.945 0.002 260;
+  --background-300: 0.90 0.003 260;
+  --background-400: 0.82 0.004 260;
+  --background-500: 0.70 0.004 260;
+  --background-600: 0.60 0.004 260;
+  --background-700: 0.48 0.003 260;
+  --background-800: 0.32 0.003 260;
+  --background-900: 0.20 0.002 260;
+  --background-950: 0.11 0.002 260;
+
+  --primary-50: 0.975 0.002 75;
+  --primary-100: 0.94 0.004 75;
+  --primary-200: 0.88 0.006 75;
+  --primary-300: 0.74 0.008 75;
+  --primary-400: 0.56 0.010 75;
+  --primary-500: 0.28 0.012 72;
+  --primary-600: 0.22 0.010 72;
+  --primary-700: 0.17 0.008 72;
+  --primary-800: 0.12 0.006 72;
+  --primary-900: 0.08 0.004 72;
+  --primary-950: 0.04 0.002 72;
+
+  --accent-50: 0.978 0.006 22;
+  --accent-100: 0.94 0.012 22;
+  --accent-200: 0.88 0.022 22;
+  --accent-300: 0.76 0.044 22;
+  --accent-400: 0.60 0.075 22;
+  --accent-500: 0.48 0.10 22;
+  --accent-600: 0.40 0.085 22;
+  --accent-700: 0.30 0.065 22;
+  --accent-800: 0.22 0.045 22;
+  --accent-900: 0.15 0.030 22;
+  --accent-950: 0.09 0.016 22;
+
+  --secondary-50: 0.978 0.002 80;
+  --secondary-100: 0.94 0.004 80;
+  --secondary-200: 0.88 0.005 80;
+  --secondary-300: 0.78 0.006 80;
+  --secondary-400: 0.66 0.007 80;
+  --secondary-500: 0.56 0.007 80;
+  --secondary-600: 0.48 0.006 80;
+  --secondary-700: 0.40 0.005 80;
+  --secondary-800: 0.30 0.004 80;
+  --secondary-900: 0.22 0.003 80;
+  --secondary-950: 0.14 0.002 80;
+
+  --foreground-50: 0.978 0.002 80;
+  --foreground-100: 0.94 0.002 80;
+  --foreground-200: 0.88 0.002 80;
+  --foreground-300: 0.74 0.002 80;
+  --foreground-400: 0.60 0.002 80;
+  --foreground-500: 0.50 0.002 80;
+  --foreground-600: 0.40 0.002 80;
+  --foreground-700: 0.30 0.002 80;
+  --foreground-800: 0.20 0.002 80;
+  --foreground-900: 0.14 0.002 80;
+  --foreground-950: 0.09 0.002 80;
+}
+
+/* ── Dark Theme — 暖炭轴(hue 80/25),墨纸反转:米白 CTA + 炭字 ── */
+html[data-theme="dark"] {
+  --background-50: 0.165 0.008 80;
+  --background-100: 0.20 0.009 80;
+  --background-200: 0.245 0.010 80;
+  --background-300: 0.30 0.010 80;
+  --background-400: 0.38 0.009 80;
+  --background-500: 0.46 0.008 80;
+  --background-600: 0.56 0.007 80;
+  --background-700: 0.66 0.006 85;
+  --background-800: 0.76 0.005 85;
+  --background-900: 0.86 0.005 88;
+  --background-950: 0.94 0.005 88;
+
+  --primary-50: 0.22 0.010 78;
+  --primary-100: 0.27 0.011 78;
+  --primary-200: 0.34 0.012 78;
+  --primary-300: 0.46 0.012 80;
+  --primary-400: 0.62 0.010 82;
+  --primary-500: 0.93 0.006 88;
+  --primary-600: 0.88 0.007 85;
+  --primary-700: 0.82 0.008 85;
+  --primary-800: 0.90 0.006 88;
+  --primary-900: 0.94 0.005 88;
+  --primary-950: 0.97 0.004 88;
+
+  --accent-50: 0.20 0.035 25;
+  --accent-100: 0.26 0.055 25;
+  --accent-200: 0.34 0.075 25;
+  --accent-300: 0.42 0.095 25;
+  --accent-400: 0.48 0.11 25;
+  --accent-500: 0.55 0.12 25;
+  --accent-600: 0.62 0.115 25;
+  --accent-700: 0.70 0.10 25;
+  --accent-800: 0.78 0.07 25;
+  --accent-900: 0.86 0.045 25;
+  --accent-950: 0.92 0.025 25;
+
+  --secondary-50: 0.20 0.005 80;
+  --secondary-100: 0.25 0.005 80;
+  --secondary-200: 0.31 0.005 80;
+  --secondary-300: 0.38 0.005 80;
+  --secondary-400: 0.46 0.005 80;
+  --secondary-500: 0.54 0.005 80;
+  --secondary-600: 0.62 0.004 80;
+  --secondary-700: 0.70 0.004 82;
+  --secondary-800: 0.78 0.003 85;
+  --secondary-900: 0.87 0.003 85;
+  --secondary-950: 0.94 0.002 88;
+
+  --foreground-50: 0.20 0.006 80;
+  --foreground-100: 0.26 0.006 82;
+  --foreground-200: 0.32 0.006 82;
+  --foreground-300: 0.40 0.006 85;
+  --foreground-400: 0.50 0.006 85;
+  --foreground-500: 0.58 0.006 85;
+  --foreground-600: 0.68 0.006 85;
+  --foreground-700: 0.78 0.006 85;
+  --foreground-800: 0.84 0.006 85;
+  --foreground-900: 0.90 0.006 85;
+  --foreground-950: 0.95 0.006 88;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: oklch(var(--background-50));
+    color: oklch(var(--foreground-900));
+    line-height: 1.8;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background-color: oklch(var(--primary-100) / 0.5);
+  }
+
+  /* ── Scrollbar: ink-thin, paper-quiet ── */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--foreground-300) / 0.18) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(var(--foreground-300) / 0.22);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--foreground-400) / 0.35);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .chapter-band {
+    background-color: oklch(var(--background-100));
+    border-top: 1px solid oklch(var(--foreground-200) / 0.25);
+    border-bottom: 1px solid oklch(var(--foreground-200) / 0.25);
+  }
+}
+
+@layer utilities {
+  .fade-in-up {
+    animation: fadeInUp 0.5s ease-out both;
+  }
+
+  .fade-in-up-delay-1 {
+    animation: fadeInUp 0.5s ease-out 0.1s both;
+  }
+
+  .fade-in-up-delay-2 {
+    animation: fadeInUp 0.5s ease-out 0.2s both;
+  }
+
+  .reply-fade-in {
+    animation: replyFadeIn 0.45s ease-out both;
+  }
+
+  .content-fade-in {
+    animation: contentFadeIn 0.5s ease-out both;
+  }
+
+  .page-enter {
+    animation: pageEnter 0.35s ease-out both;
+  }
+
+  .animate-pulse-subtle {
+    animation: pulseSubtle 2.5s ease-in-out infinite;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── Magazine dot leaders ── */
+  .dot-leaders {
+    flex: 1;
+    background-image: radial-gradient(circle, oklch(var(--foreground-300)) 0.6px, transparent 0.6px);
+    background-size: 6px 2px;
+    background-position: center;
+    background-repeat: repeat-x;
+    margin: 0 10px;
+    min-width: 20px;
+    height: 1.2em;
+    align-self: center;
+    opacity: 0.3;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes replyFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseSubtle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.92);
+  }
+}
+
+@keyframes pageTransitionEnter {
+  0% {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+.page-transition-enter {
+  animation: pageTransitionEnter 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.page-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-color: oklch(var(--background-50));
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.page-transition-overlay.active {
+  opacity: 1;
+}
+
+@keyframes scrollReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.scroll-reveal.visible {
+  animation: scrollReveal 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.scroll-reveal-delay-1.visible { animation-delay: 0.08s; }
+.scroll-reveal-delay-2.visible { animation-delay: 0.16s; }
+.scroll-reveal-delay-3.visible { animation-delay: 0.24s; }
+
+/* ── Seal stamp animation ── */
+@keyframes sealStamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(0.76);
+  }
+  52% {
+    opacity: 1;
+    transform: rotate(-3.2deg) scale(1.07);
+  }
+  74% {
+    transform: rotate(-6.8deg) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-6deg) scale(1);
+  }
+}
+
+.seal-stamp {
+  animation: sealStamp 0.95s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* ── Mobile bottom tabs ──
+ * The bar is portaled into <body>, so it is never trapped by an ancestor's
+ * transform/filter — `position: fixed` reliably anchors to the viewport. */
+.mobile-tabs-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: block;
+}
+
+.mobile-tabs-spacer {
+  display: block;
+}
+
+/* Hide the mobile bar only on true desktop: wide screen AND a fine pointer
+ * (mouse/trackpad). Using pointer avoids the preview iframe reporting a wide
+ * pixel width and wrongly hiding the bar on touch/mobile previews. */
+@media (min-width: 1024px) and (pointer: fine) {
+  .mobile-tabs-container {
+    display: none;
+  }
+  .mobile-tabs-spacer {
+    display: none;
+  }
+}
+
+/* Anti-spam honeypot — hide without inline styles */
+input[name="contact_alt"] {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+}
