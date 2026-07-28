@@ -134,7 +134,12 @@ const common: Record<string, string> = {
   // New Project
   "newProject.title": "Create Product",
   "newProject.deck": "A complete product page so the community can understand what you're building",
-  "newProject.requiredHint": "Fields marked * are required; the rest can wait until after create.",
+  "newProject.deckCompact": "Name and URL are enough to create — polish the rest later.",
+  "newProject.requiredHint": "* required · rest optional",
+  "newProject.optionalSection": "About / tags / links / shots (optional)",
+  "newProject.expandOptional": "Show optional",
+  "newProject.collapseOptional": "Hide optional",
+  "newProject.optionalCollapsedHint": "Description, tags, links, and screenshots can wait.",
   "newProject.formIncomplete": "Some required fields are missing or invalid. Fix them, then try again.",
   "newProject.formIncompleteCount": "{{count}} items need attention — use the list below.",
   "newProject.jumpToError": "Jump to first issue",

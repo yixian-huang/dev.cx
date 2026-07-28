@@ -131,7 +131,12 @@ const common: Record<string, string> = {
   // New Project
   "newProject.title": "创建产品",
   "newProject.deck": "一个完整的产品主页，让社区更好地了解你在做什么",
-  "newProject.requiredHint": "标 * 的为必填；其余可先留空，创建后再补。",
+  "newProject.deckCompact": "填名称与地址即可创建，其余选填、之后还能改。",
+  "newProject.requiredHint": "* 必填 · 其余选填",
+  "newProject.optionalSection": "介绍 / 标签 / 链接 / 截图（选填）",
+  "newProject.expandOptional": "展开选填",
+  "newProject.collapseOptional": "收起选填",
+  "newProject.optionalCollapsedHint": "介绍、标签、链接、截图可创建后再补。",
   "newProject.formIncomplete": "还有必填项未完成或填写有误，请按提示修改后再创建。",
   "newProject.formIncompleteCount": "还有 {{count}} 处需要修改，请按下方列表逐项处理。",
   "newProject.jumpToError": "跳到第一处",

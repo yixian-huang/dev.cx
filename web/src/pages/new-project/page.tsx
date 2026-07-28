@@ -22,9 +22,7 @@ import {
   focusProjectField,
 } from '@/lib/project-form';
 
-// 发布页 = 共享 ProjectFormFields + 创建壳。字段、顺序、文案、校验与设置页
-// (project/settings)完全一致;slug 是可编辑字段:随名称实时派生预填(用户手改后
-// 停止跟随),不再无条件加随机后缀——URL 即档案的一部分,所见即最终地址。
+// 创建产品页:紧凑双栏表单,成功后 replace 跳转产品详情 /p/:slug。
 
 const NO_ERRORS: DraftErrors = {};
 
@@ -36,15 +34,10 @@ export default function NewProjectPage() {
 
   const [draft, setDraft] = useState<ProjectDraft>(emptyDraft);
   const [slug, setSlug] = useState('');
-  // 用户手动编辑过 slug 后,名称变更不再覆盖它
   const [slugTouched, setSlugTouched] = useState(false);
-  // 服务端回弹的 slug 错误(slug_taken/slug_invalid)——展示在字段下方,不落底部通用槽
   const [slugServerError, setSlugServerError] = useState<FieldError | undefined>(undefined);
-  // 首次提交前不亮错——只在用户点过「创建」后才逐字段展示
   const [showErrors, setShowErrors] = useState(false);
   const [creating, setCreating] = useState(false);
-  // 非 401 的写失败内联展示(spec §3 约定),不吞、不用 toast;失败时保留表单内容不清空,
-  // 用户可以直接改改重试。
   const [createError, setCreateError] = useState<string | undefined>(undefined);
 
   const errors = useMemo(() => validateDraft(draft), [draft]);
@@ -80,10 +73,9 @@ export default function NewProjectPage() {
     const items = collectFieldErrors(nextErrors, nextSlugError);
     const summary =
       items.length === 0
-        ? t('newProject.fixIncomplete')
-        : t('newProject.fixIncompleteCount', { count: items.length });
+        ? t('newProject.formIncomplete')
+        : t('newProject.formIncompleteCount', { count: items.length });
     setCreateError(summary);
-    // 等错误态渲染后再滚到首错并 focus——否则 getElementById 可能还拿旧 DOM
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         focusProjectField(firstInvalidFieldId(nextErrors, nextSlugError));
@@ -91,8 +83,7 @@ export default function NewProjectPage() {
     });
   }, [t]);
 
-  // 成功即 navigate('/p/'+slug),失败内联展示、401 转登录。
-  // 按钮不因「表单未齐」而 disabled——点创建必须给出可理解反馈并聚焦首错。
+  // 成功:replace 进产品详情,避免返回键回到空表单。
   const handleCreate = useCallback(async () => {
     if (creating) return;
 
@@ -118,7 +109,7 @@ export default function NewProjectPage() {
         slug,
         ...draftToPayload(draft),
       });
-      navigate(`/p/${result.slug}`);
+      navigate(`/p/${result.slug}`, { replace: true });
     } catch (err) {
       const e = err as ApiError;
       if (e.status === 401) {
@@ -142,35 +133,38 @@ export default function NewProjectPage() {
   }, [creating, emailVerified, draft, slug, slugServerError, navigate, revealValidation, t]);
 
   return (
-    <PageShell pageEnter>
-      {/* Header */}
-      <header className="pt-10 pb-6">
-        <h1 className="font-heading text-[28px] font-semibold text-foreground-950 leading-[1.3]">
-          {t('newProject.title')}
-        </h1>
-        <p className="text-[13px] text-foreground-400 mt-1.5">{t('newProject.deck')}</p>
-        <p className="text-[12px] text-foreground-400 mt-2">
+    <PageShell width="wide" pageEnter contentClassName="pb-4">
+      {/* 紧凑刊头 */}
+      <header className="pt-6 pb-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div>
+          <h1 className="font-heading text-[22px] md:text-[24px] font-semibold text-foreground-950 leading-tight">
+            {t('newProject.title')}
+          </h1>
+          <p className="text-[12px] text-foreground-400 mt-1">
+            {t('newProject.deckCompact')}
+          </p>
+        </div>
+        <p className="text-[11px] text-foreground-400 shrink-0">
           {t('newProject.requiredHint')}
         </p>
       </header>
 
-      {/* 提交失败摘要:顶栏可见,不依赖滚到页底才能看到错误 */}
       {showErrors && (fieldErrors.length > 0 || createError) && (
         <div
           role="alert"
-          className="mb-6 px-4 py-3.5 bg-primary-50 border border-primary-100 rounded-xs"
+          className="mb-3 px-3.5 py-2.5 bg-primary-50 border border-primary-100 rounded-xs"
         >
           <p className="text-[13px] font-medium text-primary-700 leading-relaxed">
             {createError ?? t('newProject.formIncomplete')}
           </p>
           {fieldErrors.length > 0 && (
-            <ul className="mt-2 space-y-1">
+            <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
               {fieldErrors.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     onClick={() => focusProjectField(item.id)}
-                    className="text-left text-[13px] text-primary-700/90 hover:text-primary-600 underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0"
+                    className="text-left text-[12px] text-primary-700/90 hover:text-primary-600 underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0"
                   >
                     · {t(item.error.key, item.error.params)}
                   </button>
@@ -182,12 +176,13 @@ export default function NewProjectPage() {
       )}
 
       {!emailVerified && (
-        <div className="mb-6 px-4 py-3 bg-accent-100/50 border border-accent-500/30 rounded-xs text-[13px] text-foreground-700 leading-relaxed">
+        <div className="mb-3 px-3.5 py-2.5 bg-accent-100/50 border border-accent-500/30 rounded-xs text-[12px] text-foreground-700 leading-relaxed">
           {t('compose.needEmailVerify')}
         </div>
       )}
 
       <ProjectFormFields
+        layout="compact"
         draft={draft}
         errors={showErrors ? errors : NO_ERRORS}
         onChange={handleChange}
@@ -198,30 +193,32 @@ export default function NewProjectPage() {
         }}
       />
 
-      {/* Actions — sticky 底栏,错误文案贴在按钮旁,避免长表单「点了没反应」 */}
-      <div className="sticky bottom-0 z-20 -mx-6 px-6 mt-10 pt-4 pb-4 md:pb-6 bg-background-50/95 backdrop-blur-sm border-t border-foreground-200/40">
-        {(createError || (showErrors && fieldErrors.length > 0)) && (
-          <p role="alert" className="text-[13px] font-medium text-primary-700 mb-3 leading-relaxed">
-            {createError ?? t('newProject.formIncomplete')}
-            {fieldErrors[0] && (
-              <>
-                {' · '}
-                <button
-                  type="button"
-                  onClick={() => focusProjectField(fieldErrors[0].id)}
-                  className="underline underline-offset-2 hover:text-primary-600 cursor-pointer bg-transparent border-none p-0 text-inherit"
-                >
-                  {t('newProject.jumpToError')}
-                </button>
-              </>
-            )}
-          </p>
-        )}
-        <div className="flex items-center justify-end gap-3">
+      {/* 动作:贴表单底,非超高 sticky,减少「表单+底栏」叠高 */}
+      <div className="mt-4 pt-3 border-t border-foreground-200/40 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between pb-8">
+        <div className="min-h-[1.25rem]">
+          {(createError || (showErrors && fieldErrors.length > 0)) && (
+            <p role="alert" className="text-[12px] font-medium text-primary-700 leading-relaxed">
+              {createError ?? t('newProject.formIncomplete')}
+              {fieldErrors[0] && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={() => focusProjectField(fieldErrors[0].id)}
+                    className="underline underline-offset-2 hover:text-primary-600 cursor-pointer bg-transparent border-none p-0 text-inherit"
+                  >
+                    {t('newProject.jumpToError')}
+                  </button>
+                </>
+              )}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-3 shrink-0">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="px-4 py-2 text-[14px] text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none"
+            className="px-4 py-1.5 text-[13px] text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none"
           >
             {t('newProject.cancel')}
           </button>
@@ -229,7 +226,7 @@ export default function NewProjectPage() {
             type="button"
             onClick={() => void handleCreate()}
             disabled={creating}
-            className="inline-flex items-center gap-2 px-5 py-2 text-[14px] font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-5 py-1.5 text-[13px] font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {creating ? t('newProject.creating') : t('newProject.create')}
           </button>
