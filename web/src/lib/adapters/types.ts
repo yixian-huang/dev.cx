@@ -178,6 +178,10 @@ export interface BaseThread {
   links?: { label: string; url: string }[];
   // 软隐藏(0008 moderation):详情路径才可能出现;undefined = 未隐藏。
   hidden?: { reason: string };
+  /** 发布后再次编辑过 */
+  edited?: boolean;
+  /** 当前登录作者是否可编辑 */
+  canEdit?: boolean;
 }
 
 // ── profile shapes ──

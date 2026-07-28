@@ -73,6 +73,12 @@ const MESSAGES: Record<string, string> = {
   quota_exceeded: '存储空间已满',
   upload_unconfigured: '上传暂不可用',
   upload_failed: '上传失败,请重试',
+  delete_failed: '删除失败,请重试',
+  invalid_url: '无效的图片地址',
+  invalid_key: '无效的图片标识',
+
+  edit_window_closed: '已超过 30 分钟编辑时限',
+  edit_has_replies: '已有他人回复，不能再编辑',
 
   internal: '出错了,请稍后重试',
 }

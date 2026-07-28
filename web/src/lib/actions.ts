@@ -63,6 +63,21 @@ export async function deleteDraft(c: ApiClient, slug: string): Promise<void> {
   await c.del(`/api/posts/${encodeURIComponent(slug)}`)
 }
 
+/** 编辑已发布帖（30 分钟窗 + 他人回复后禁编）或草稿。 */
+export async function patchPost(
+  c: ApiClient,
+  slug: string,
+  patch: {
+    title?: string
+    body_md?: string
+    feedback_wanted?: string[]
+    uncertainties?: string[]
+    links?: { label: string; url: string }[]
+  },
+): Promise<{ slug: string }> {
+  return (await c.patch<{ post: { slug: string } }>(`/api/posts/${encodeURIComponent(slug)}`, patch)).post
+}
+
 export async function createReply(
   c: ApiClient,
   postSlug: string,

@@ -21,6 +21,11 @@ export type ApiPost = {
   author: ApiAuthor;
   created_at: string;
   updated_at?: string;
+  published_at?: string | null;
+  /** 发布后是否再次编辑过 */
+  edited?: boolean;
+  /** 当前登录作者是否仍可编辑 */
+  can_edit?: boolean;
   merged_into: string | null;
   reply_count?: number;
   project?: { slug: string; name: string } | null;

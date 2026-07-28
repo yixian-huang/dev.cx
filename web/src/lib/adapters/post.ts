@@ -64,5 +64,7 @@ export function adaptThread(p: ApiPost, replies: ApiReply[]): BaseThread {
     links: p.links.map((l) => ({ label: l.label ?? '', url: l.url ?? '' })),
     mergeInfo: mergedFrom || mergedInto ? { mergedFrom, mergedInto, mergedAt } : undefined,
     hidden: p.hidden ? { reason: p.hidden_reason ?? '' } : undefined,
+    edited: Boolean(p.edited),
+    canEdit: Boolean(p.can_edit),
   }
 }

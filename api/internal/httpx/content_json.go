@@ -25,6 +25,7 @@ type postRow struct {
 	MergedInto                              *string
 	MergedAt                                *time.Time
 	CreatedAt, UpdatedAt                    time.Time
+	PublishedAt                             *time.Time
 	HiddenAt                                *time.Time
 	HiddenReason                            string
 }
@@ -42,7 +43,10 @@ const projectCols = `id, slug, owner_id, name, tagline, description_md, stage, a
 	screenshots, tags, links, created_at, updated_at`
 
 const postCols = `id, slug, author_id, project_id, type, title, body_md, status,
-	feedback_wanted, uncertainties, links, merged_into, created_at, updated_at, merged_at, hidden_at, hidden_reason`
+	feedback_wanted, uncertainties, links, merged_into, created_at, updated_at, published_at, merged_at, hidden_at, hidden_reason`
+
+// postEditWindow 已发布帖可编辑时长；草稿不受此限。
+const postEditWindow = 30 * time.Minute
 
 // publishedOnlySQL 公开列表/计数/时间线共用：仅已发布帖。
 const publishedOnlySQL = `status = 'published'`
@@ -112,7 +116,7 @@ func scanPost(row pgx.Row) (postRow, error) {
 	var raw []byte
 	err := row.Scan(&p.ID, &p.Slug, &p.AuthorID, &p.ProjectID, &p.Type, &p.Title,
 		&p.BodyMD, &p.Status, &p.FeedbackWanted, &p.Uncertainties, &raw, &p.MergedInto,
-		&p.CreatedAt, &p.UpdatedAt, &p.MergedAt, &p.HiddenAt, &p.HiddenReason)
+		&p.CreatedAt, &p.UpdatedAt, &p.PublishedAt, &p.MergedAt, &p.HiddenAt, &p.HiddenReason)
 	if err != nil {
 		return p, err
 	}
@@ -121,6 +125,23 @@ func scanPost(row pgx.Row) (postRow, error) {
 		p.Status = "published"
 	}
 	return p, nil
+}
+
+// postPublishedAt 编辑窗与「已编辑」判定的时间原点。
+func postPublishedAt(p postRow) time.Time {
+	if p.PublishedAt != nil {
+		return p.PublishedAt.UTC()
+	}
+	return p.CreatedAt.UTC()
+}
+
+// postIsEdited：发布后再次更新（updated_at 严格晚于 published_at）。
+func postIsEdited(p postRow) bool {
+	if p.Status != "published" {
+		return false
+	}
+	pub := postPublishedAt(p)
+	return p.UpdatedAt.UTC().After(pub)
 }
 
 func scanReply(row pgx.Row) (replyRow, error) {
@@ -227,6 +248,14 @@ func (s *Server) postJSON(ctx context.Context, p postRow, withProject, withMerge
 		"uncertainties":   emptyIfNil(p.Uncertainties),
 		"links":           p.Links, "author": s.authorJSON(ctx, p.AuthorID),
 		"created_at": p.CreatedAt, "updated_at": p.UpdatedAt, "merged_into": strOrNil(p.MergedInto),
+		"edited":     postIsEdited(p),
+	}
+	if p.PublishedAt != nil {
+		out["published_at"] = p.PublishedAt.UTC().Format(time.RFC3339)
+	} else if status == "published" {
+		out["published_at"] = p.CreatedAt.UTC().Format(time.RFC3339)
+	} else {
+		out["published_at"] = nil
 	}
 	// merged_into_post/merged_at 只在这条帖子确实被合并时才附带:merged_into 本身只是目标帖的
 	// id,没有 GET-by-id 端点,前端渲染"已合并至"横幅需要目标帖的 slug(拼链接)和 title(显示文案)。

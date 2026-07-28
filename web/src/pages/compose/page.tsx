@@ -36,13 +36,16 @@ export default function ComposePage() {
   const typeParam = searchParams.get('type') as PostType | null;
   const projectParam = searchParams.get('project');
   const draftParam = (searchParams.get('draft') ?? '').trim();
+  const editParam = (searchParams.get('edit') ?? '').trim();
+  const loadSlug = draftParam || editParam;
+  const loadMode: 'draft' | 'edit' | null = draftParam ? 'draft' : editParam ? 'edit' : null;
 
   const validType = typeParam === 'show' || typeParam === 'build' || typeParam === 'discuss';
   // C3 修复:锁定不再只认 discuss——项目页三个入口(提交反馈=discuss、写进度=build、
   // 分享成果=show)都要锁定类型与关联产品。
-  const isLocked = lockedParam === '1' && validType && !!projectParam;
+  // 编辑已发布帖时锁定类型与产品（不允许改 type/project）
+  const editLocked = Boolean(editParam);
   const initialType: PostType = validType ? (typeParam as PostType) : 'show';
-  const lockedProjectId = isLocked ? projectParam : null;
   // 没有按 slug 查项目展示名的取数(锁定态只从 URL query 拿到 slug 本身)——直接显示 slug,
   // 不编造/回落 mock 的项目名。
   const lockedKind: LockedKind = typeParam === 'build' ? 'build' : typeParam === 'show' ? 'show' : 'feedback';
@@ -51,8 +54,14 @@ export default function ComposePage() {
   const [editorEpoch, setEditorEpoch] = useState(0);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [draftSeed, setDraftSeed] = useState<DraftSeed | null>(null);
+  const isLocked =
+    (lockedParam === '1' && validType && !!projectParam) ||
+    (editLocked && Boolean(draftSeed));
+  const lockedProjectId = isLocked
+    ? (projectParam ?? draftSeed?.project_slug ?? null)
+    : null;
   const [draftLoadError, setDraftLoadError] = useState<string | undefined>(undefined);
-  const [draftLoading, setDraftLoading] = useState(Boolean(draftParam && isLoggedIn));
+  const [draftLoading, setDraftLoading] = useState(Boolean(loadSlug && isLoggedIn));
 
   const [quickCreated, setQuickCreated] = useState(false);
   const [quickProjectSlug, setQuickProjectSlug] = useState('');
@@ -61,9 +70,9 @@ export default function ComposePage() {
   // 失败时表单内容不清空(QuickProjectForm 自己持有输入状态,失败不卸载它就自然保留)。
   const [quickError, setQuickError] = useState<string | undefined>(undefined);
 
-  // 加载 ?draft= 预填
+  // 加载 ?draft= / ?edit= 预填
   useEffect(() => {
-    if (!draftParam || !isLoggedIn) {
+    if (!loadSlug || !isLoggedIn || !loadMode) {
       setDraftLoading(false);
       return;
     }
@@ -73,12 +82,25 @@ export default function ComposePage() {
     (async () => {
       try {
         const client = createClient({ baseURL: '' });
-        const { post } = await client.get<{ post: ApiPost }>(`/api/posts/${encodeURIComponent(draftParam)}`);
+        const { post } = await client.get<{ post: ApiPost }>(`/api/posts/${encodeURIComponent(loadSlug)}`);
         if (cancelled) return;
-        if (post.status && post.status !== 'draft') {
-          setDraftLoadError(t('compose.draftNotEditable'));
-          setDraftLoading(false);
-          return;
+        if (loadMode === 'draft') {
+          if (post.status && post.status !== 'draft') {
+            setDraftLoadError(t('compose.draftNotEditable'));
+            setDraftLoading(false);
+            return;
+          }
+        } else {
+          if (post.status === 'draft') {
+            setDraftLoadError(t('compose.draftNotEditable'));
+            setDraftLoading(false);
+            return;
+          }
+          if (!post.can_edit) {
+            setDraftLoadError(t('compose.editNotAllowed'));
+            setDraftLoading(false);
+            return;
+          }
         }
         setDraftSeed({
           slug: post.slug,
@@ -87,6 +109,7 @@ export default function ComposePage() {
           body_md: post.body_md ?? '',
           project_slug: post.project?.slug,
           feedback_wanted: post.feedback_wanted ?? [],
+          mode: loadMode,
         });
         setEditorEpoch((n) => n + 1);
       } catch (err) {
@@ -102,13 +125,18 @@ export default function ComposePage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [draftParam, isLoggedIn, navigate, t]);
+  }, [loadSlug, loadMode, isLoggedIn, navigate, t]);
 
   const handlePublished = useCallback((slug: string) => {
+    // 编辑模式保存后回帖子页
+    if (editParam) {
+      navigate(`/t/${slug}`, { replace: true });
+      return;
+    }
     setPublishedSlug(slug);
     setLastSaved(null);
     setDraftSeed(null);
-  }, []);
+  }, [editParam, navigate]);
 
   const handleDraftSaved = useCallback((_slug: string, at: Date) => {
     setLastSaved(at);

@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -148,9 +149,11 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// 类型以 body 为准（compose 可改类型）；slug 不随标题变。
+		// 首次发布时写 published_at；保持已发布帖的 published_at 不变（此分支仅 draft）。
 		if _, err := s.deps.Pool.Exec(ctx,
 			`update posts set type=$1, project_id=$2, title=$3, body_md=$4, status=$5,
-			 feedback_wanted=$6, uncertainties=$7, links=$8, updated_at=now()
+			 feedback_wanted=$6, uncertainties=$7, links=$8, updated_at=now(),
+			 published_at = case when $5 = 'published' and published_at is null then now() else published_at end
 			 where id=$9`,
 			in.Type, projectID, title, in.BodyMD, status,
 			nonNilStrings(in.FeedbackWanted), nonNilStrings(in.Uncertainties), linksJSON, cur.ID); err != nil {
@@ -178,12 +181,19 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 			seed = "draft"
 		}
 		slug = slugs.Generate(seed)
+		// 发布时 published_at 与 updated_at 同一时刻，避免刚创建就被标成「已编辑」
+		now := time.Now().UTC()
+		var publishedAt any
+		var updatedAt any = now
+		if status == "published" {
+			publishedAt = now
+		}
 		_, err := s.deps.Pool.Exec(ctx,
 			`insert into posts (id, slug, author_id, project_id, type, title, body_md, status,
-			                    feedback_wanted, uncertainties, links)
-			 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+			                    feedback_wanted, uncertainties, links, published_at, updated_at)
+			 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
 			id, slug, uid, projectID, in.Type, title, in.BodyMD, status,
-			nonNilStrings(in.FeedbackWanted), nonNilStrings(in.Uncertainties), linksJSON)
+			nonNilStrings(in.FeedbackWanted), nonNilStrings(in.Uncertainties), linksJSON, publishedAt, updatedAt)
 		if err == nil {
 			if status == "published" {
 				// best-effort 通知：失败不阻塞发帖响应。
@@ -212,15 +222,18 @@ func (s *Server) writePostBySlug(w http.ResponseWriter, r *http.Request, slug st
 		Err(w, 404, "not_found")
 		return
 	}
+	viewer := currentUserID(r)
 	// 草稿仅作者 / admin 可见
 	if p.Status == "draft" {
-		viewer := currentUserID(r)
 		if viewer != p.AuthorID && !s.isAdmin(ctx, viewer) {
 			Err(w, 404, "not_found")
 			return
 		}
 	}
-	WriteJSON(w, code, map[string]any{"post": s.applyHidden(r, p, s.postJSON(ctx, p, true, true))})
+	m := s.applyHidden(r, p, s.postJSON(ctx, p, true, true))
+	// can_edit 仅对作者有意义；他人恒 false
+	m["can_edit"] = s.postCanEdit(ctx, p, viewer)
+	WriteJSON(w, code, map[string]any{"post": m})
 }
 
 // applyHidden 只用于详情路径(列表 SQL 已过滤隐藏帖):作者与 admin 拿到原文 + hidden
@@ -266,6 +279,13 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 	if cur.HiddenAt != nil {
 		Err(w, 403, "hidden")
 		return
+	}
+	// 已发布帖：30 分钟窗 + 他人可见回复后禁编（草稿不限）
+	if cur.Status == "published" {
+		if code := s.postEditBlocked(ctx, cur); code != "" {
+			Err(w, 403, code)
+			return
+		}
 	}
 	var in struct {
 		Title          *string              `json:"title"`
@@ -322,7 +342,9 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 	// slug 不随标题变化——它是已经被外部引用的地址
 	if _, err := s.deps.Pool.Exec(ctx,
 		`update posts set title=$1, body_md=$2, feedback_wanted=$3, uncertainties=$4,
-		 links=$5, status=$6, updated_at=now() where id=$7`,
+		 links=$5, status=$6, updated_at=now(),
+		 published_at = case when $6 = 'published' and published_at is null then now() else published_at end
+		 where id=$7`,
 		title, body, nonNilStrings(fw), nonNilStrings(unc), linksJSON, status, cur.ID); err != nil {
 		Err(w, 500, "internal")
 		return
@@ -331,6 +353,38 @@ func (s *Server) handlePatchPost(w http.ResponseWriter, r *http.Request) {
 		s.notifyOnCreatePost(ctx, uid, cur.ID, cur.Type, body, cur.ProjectID)
 	}
 	s.writePostBySlug(w, r, slug, http.StatusOK)
+}
+
+// postEditBlocked 返回禁编原因 code；空串表示可编。
+// 规则：发布后 30 分钟内；出现他人可见回复后立即禁编。
+func (s *Server) postEditBlocked(ctx context.Context, p postRow) string {
+	if p.Status != "published" {
+		return ""
+	}
+	pub := postPublishedAt(p)
+	if time.Since(pub) > postEditWindow {
+		return "edit_window_closed"
+	}
+	var n int
+	_ = s.deps.Pool.QueryRow(ctx,
+		`select count(*)::int from replies
+		 where post_id=$1 and hidden_at is null and author_id <> $2`,
+		p.ID, p.AuthorID).Scan(&n)
+	if n > 0 {
+		return "edit_has_replies"
+	}
+	return ""
+}
+
+// postCanEdit 给详情接口：仅作者、且未禁编。
+func (s *Server) postCanEdit(ctx context.Context, p postRow, viewer string) bool {
+	if viewer == "" || viewer != p.AuthorID {
+		return false
+	}
+	if p.Status == "draft" {
+		return true
+	}
+	return s.postEditBlocked(ctx, p) == ""
 }
 
 func (s *Server) handleListMyDrafts(w http.ResponseWriter, r *http.Request) {

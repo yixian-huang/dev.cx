@@ -5,7 +5,7 @@ import MarkdownEditor from './MarkdownEditor';
 import { useMyProjects } from '@/hooks/useMyProjects';
 import { createClient, type ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-errors';
-import { createPost } from '@/lib/actions';
+import { createPost, patchPost } from '@/lib/actions';
 
 export type PostType = 'show' | 'build' | 'discuss';
 
@@ -16,6 +16,8 @@ export type DraftSeed = {
   body_md: string;
   project_slug?: string;
   feedback_wanted?: string[];
+  /** draft = 草稿；edit = 已发布短窗编辑 */
+  mode?: 'draft' | 'edit';
 };
 
 interface UnifiedEditorProps {
@@ -65,7 +67,11 @@ export default function UnifiedEditor({
   const [customChips, setCustomChips] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
-  const [draftSlug, setDraftSlug] = useState<string | null>(seed?.slug ?? null);
+  const editMode = seed?.mode === 'edit';
+  const [draftSlug, setDraftSlug] = useState<string | null>(
+    seed?.mode === 'edit' ? null : (seed?.slug ?? null),
+  );
+  const editSlug = editMode ? seed?.slug ?? null : null;
 
   const [projectOpen, setProjectOpen] = useState(false);
   const projectRef = useRef<HTMLDivElement>(null);
@@ -110,23 +116,32 @@ export default function UnifiedEditor({
     setSavingDraft(true);
     try {
       const client = createClient({ baseURL: '' });
-      const result = await createPost(client, {
-        type: tp,
-        project_slug: pid || undefined,
-        title: ti.trim(),
-        body_md: bo,
-        status: 'draft',
-        ...(draftSlugRef.current ? { draft_slug: draftSlugRef.current } : {}),
-        ...(fb.length > 0 ? { feedback_wanted: fb } : {}),
-      });
-      setDraftSlug(result.slug);
-      draftSlugRef.current = result.slug;
-      onDraftSaved(result.slug, new Date());
-      // 同步 URL，便于刷新恢复
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href);
-        url.searchParams.set('draft', result.slug);
-        window.history.replaceState({}, '', url.pathname + url.search);
+      if (editMode && editSlug) {
+        // 已发布短窗：自动保存 = PATCH
+        await patchPost(client, editSlug, {
+          title: ti.trim(),
+          body_md: bo,
+          ...(fb.length > 0 ? { feedback_wanted: fb } : { feedback_wanted: [] }),
+        });
+        onDraftSaved(editSlug, new Date());
+      } else {
+        const result = await createPost(client, {
+          type: tp,
+          project_slug: pid || undefined,
+          title: ti.trim(),
+          body_md: bo,
+          status: 'draft',
+          ...(draftSlugRef.current ? { draft_slug: draftSlugRef.current } : {}),
+          ...(fb.length > 0 ? { feedback_wanted: fb } : {}),
+        });
+        setDraftSlug(result.slug);
+        draftSlugRef.current = result.slug;
+        onDraftSaved(result.slug, new Date());
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.set('draft', result.slug);
+          window.history.replaceState({}, '', url.pathname + url.search);
+        }
       }
     } catch (err) {
       const e = err as ApiError;
@@ -138,7 +153,7 @@ export default function UnifiedEditor({
     } finally {
       setSavingDraft(false);
     }
-  }, [navigate, onDraftSaved, t]);
+  }, [navigate, onDraftSaved, t, editMode, editSlug]);
 
   const scheduleAutoSave = useCallback(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -175,16 +190,25 @@ export default function UnifiedEditor({
     setPublishing(true);
     try {
       const client = createClient({ baseURL: '' });
-      const result = await createPost(client, {
-        type: postType,
-        project_slug: projectId || undefined,
-        title: title.trim(),
-        body_md: body,
-        status: 'published',
-        ...(draftSlug ? { draft_slug: draftSlug } : {}),
-        ...(feedback.length > 0 ? { feedback_wanted: feedback } : {}),
-      });
-      onPublished(result.slug);
+      if (editMode && editSlug) {
+        const result = await patchPost(client, editSlug, {
+          title: title.trim(),
+          body_md: body,
+          ...(feedback.length > 0 ? { feedback_wanted: feedback } : { feedback_wanted: [] }),
+        });
+        onPublished(result.slug);
+      } else {
+        const result = await createPost(client, {
+          type: postType,
+          project_slug: projectId || undefined,
+          title: title.trim(),
+          body_md: body,
+          status: 'published',
+          ...(draftSlug ? { draft_slug: draftSlug } : {}),
+          ...(feedback.length > 0 ? { feedback_wanted: feedback } : {}),
+        });
+        onPublished(result.slug);
+      }
     } catch (err) {
       const e = err as ApiError;
       if (e.status === 401) {
@@ -195,7 +219,7 @@ export default function UnifiedEditor({
     } finally {
       setPublishing(false);
     }
-  }, [canPublish, postType, projectId, title, body, feedback, draftSlug, navigate, onPublished]);
+  }, [canPublish, postType, projectId, title, body, feedback, draftSlug, navigate, onPublished, editMode, editSlug]);
 
   const selectedProject = myProjects.find((p) => p.id === projectId);
   const presetChips = PRESET_CHIP_KEYS.map((k) => t(k));
@@ -359,7 +383,11 @@ export default function UnifiedEditor({
           disabled={savingDraft}
           className="inline-flex items-center px-4 py-2 text-sm text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none disabled:opacity-40"
         >
-          {savingDraft ? t('compose.savingDraft') : t('compose.saveDraft')}
+          {savingDraft
+            ? t('compose.savingDraft')
+            : editMode
+              ? t('compose.saveEdit')
+              : t('compose.saveDraft')}
         </button>
         <button
           type="button"
@@ -367,7 +395,11 @@ export default function UnifiedEditor({
           disabled={!canPublish}
           className="inline-flex items-center px-5 py-2 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer"
         >
-          {publishing ? t('compose.publishing') : t('compose.publish')}
+          {publishing
+            ? t('compose.publishing')
+            : editMode
+              ? t('compose.saveAndView')
+              : t('compose.publish')}
         </button>
       </div>
     </div>
