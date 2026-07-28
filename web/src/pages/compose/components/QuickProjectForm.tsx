@@ -38,10 +38,16 @@ export default function QuickProjectForm({ onCreated, onCancel, creating = false
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
 
+  const [localError, setLocalError] = useState<string | undefined>(undefined);
   const canCreate = name.trim().length > 0;
 
   const handleCreate = () => {
-    if (!canCreate) return;
+    if (creating) return;
+    if (!name.trim()) {
+      setLocalError(t('project.err.nameRequired'));
+      return;
+    }
+    setLocalError(undefined);
     onCreated({
       name: name.trim(),
       deck: deck.trim(),
@@ -67,7 +73,10 @@ export default function QuickProjectForm({ onCreated, onCancel, creating = false
         <input
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (localError) setLocalError(undefined);
+          }}
           placeholder={t('onboarding.projectNamePlaceholder')}
           className="w-full font-heading text-heading-lg text-foreground-950 bg-background-100 placeholder:text-foreground-300 px-3 py-2.5 rounded-xs outline-none transition-colors duration-200"
         />
@@ -131,20 +140,26 @@ export default function QuickProjectForm({ onCreated, onCancel, creating = false
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-3 pt-6">
-        {error && (
-          <span className="text-[13px] text-primary-700 mr-auto">{error}</span>
+        {(error || localError) && (
+          <span role="alert" className="text-[13px] font-medium text-primary-700 mr-auto">
+            {localError || error}
+          </span>
         )}
         <button
+          type="button"
           onClick={onCancel}
           disabled={creating}
-          className="px-4 py-2 text-sm text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-sm text-foreground-500 hover:text-foreground-800 transition-colors duration-200 whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-transparent border-none"
         >
           {t('compose.cancel')}
         </button>
         <button
+          type="button"
           onClick={handleCreate}
-          disabled={!canCreate || creating}
-          className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={creating}
+          className={`inline-flex items-center gap-2 px-5 py-2 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+            !canCreate && !creating ? 'opacity-70' : ''
+          }`}
         >
           {creating ? (
             <>

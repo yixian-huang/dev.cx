@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import RichTextarea from '@/components/base/RichTextarea';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ReplyComposerProps {
-  // 返回值(或其 resolve 值)表示是否发送成功——失败(如 400 too_long/404 not_found)时
-  // composer 保留草稿、不折叠,让用户能看着错误提示改完重发,而不是静默吞掉后清空文本框。
+  // 返回值(或其 resolve 值)表示是否发送成功——失败时 composer 保留草稿、不折叠。
   onSend: (text: string) => boolean | Promise<boolean>;
   replyToFloor?: number;
   replyToAuthor?: string;
@@ -25,36 +25,55 @@ export default function ReplyComposer({
   error,
 }: ReplyComposerProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const emailVerified = user?.emailVerified !== false;
   const [expanded, setExpanded] = useState(false);
   const [text, setText] = useState('');
+  const [localError, setLocalError] = useState<string | undefined>(undefined);
+  const [sending, setSending] = useState(false);
 
-  // Expand when replyToFloor is set
   useEffect(() => {
     if (replyToFloor !== undefined) {
       setExpanded(true);
     }
   }, [replyToFloor]);
 
+  // 父级 API 错误到达时清本地空内容提示,避免叠两句
+  useEffect(() => {
+    if (error) setLocalError(undefined);
+  }, [error]);
+
   const handleSend = async () => {
-    if (!text.trim()) return;
-    // onSend 的契约是"返回/resolve 是否成功",但调用方的 catch 分支不保证覆盖所有情况
-    // (目前的实现总是自己 try/catch 后返回 false,但这里不该假设未来所有调用方都这样做)——
-    // 一个意外的 throw 不该变成未捕获的 rejection,当作失败处理,草稿保留、不折叠。
+    if (sending) return;
+    setLocalError(undefined);
+    if (!emailVerified) {
+      setLocalError(t('compose.needEmailVerify'));
+      return;
+    }
+    if (!text.trim()) {
+      setLocalError(t('thread.needBody'));
+      return;
+    }
+    setSending(true);
     let ok = false;
     try {
       ok = await onSend(text);
     } catch {
       ok = false;
+    } finally {
+      setSending(false);
     }
     if (!ok) return;
     setText('');
     setExpanded(false);
+    setLocalError(undefined);
     if (onCancelReply) onCancelReply();
   };
 
   const handleCancel = () => {
     setExpanded(false);
     setText('');
+    setLocalError(undefined);
     if (onCancelReply) onCancelReply();
   };
 
@@ -62,16 +81,13 @@ export default function ReplyComposer({
     ? `${t('thread.replyTo', { floor: replyToFloor ?? 0 })} @${replyToAuthor}`
     : t('thread.replyPlaceholder');
 
-  // Floating bar — unauthenticated collapsed state
+  const shellClass = docked
+    ? 'relative w-full pt-4 pb-6'
+    : 'fixed bottom-0 left-0 right-0 z-40 px-6 pb-4 pt-2';
+
   if (!isLoggedIn) {
     return (
-      <div
-        className={
-          docked
-            ? 'relative w-full pt-4 pb-6'
-            : 'fixed bottom-0 left-0 right-0 z-40 px-6 pb-4 pt-2'
-        }
-      >
+      <div className={shellClass}>
         <div className="max-w-[640px] mx-auto">
           <Link
             to="/login"
@@ -92,19 +108,17 @@ export default function ReplyComposer({
     );
   }
 
-  // Floating bar (collapsed state)
   if (!expanded) {
     return (
-      <div
-        className={
-          docked
-            ? 'relative w-full pt-4 pb-6'
-            : 'fixed bottom-0 left-0 right-0 z-40 px-6 pb-4 pt-2'
-        }
-      >
-        <div className="max-w-[640px] mx-auto">
-          {/* 常驻回复条(画布 6a):bg-100 输入面 + 墨色发布按钮 */}
+      <div className={shellClass}>
+        <div className="max-w-[640px] mx-auto space-y-2">
+          {!emailVerified && (
+            <p className="px-3 py-2 text-[12px] text-foreground-700 bg-accent-100/50 border border-accent-500/30 rounded-xs">
+              {t('compose.needEmailVerify')}
+            </p>
+          )}
           <button
+            type="button"
             onClick={() => setExpanded(true)}
             className="w-full flex items-center gap-3 px-4 py-3 bg-background-100 rounded-xs transition-colors duration-200 cursor-pointer text-left border-none"
           >
@@ -120,18 +134,12 @@ export default function ReplyComposer({
     );
   }
 
-  // Expanded state
+  const displayError = localError || error;
+
   return (
-    <div
-      className={
-        docked
-          ? 'relative w-full pt-4 pb-6'
-          : 'fixed bottom-0 left-0 right-0 z-40 px-6 pb-6 pt-2'
-      }
-    >
+    <div className={docked ? 'relative w-full pt-4 pb-6' : 'fixed bottom-0 left-0 right-0 z-40 px-6 pb-6 pt-2'}>
       <div className="max-w-[640px] mx-auto">
         <div className="bg-background-50 border border-background-200/70 rounded-md overflow-hidden">
-          {/* Reply context bar */}
           {replyToAuthor && (
             <div className="flex items-center justify-between px-4 py-2 bg-background-100/70 border-b border-background-200/40">
               <span className="text-[12px] text-foreground-500">
@@ -139,19 +147,27 @@ export default function ReplyComposer({
                 <span className="font-medium text-foreground-700">@{replyToAuthor}</span>
               </span>
               <button
+                type="button"
                 onClick={handleCancel}
-                className="text-foreground-400 hover:text-foreground-600 transition-colors duration-200 cursor-pointer"
+                className="text-foreground-400 hover:text-foreground-600 transition-colors duration-200 cursor-pointer bg-transparent border-none"
               >
                 <i className="ri-close-line text-[15px]"></i>
               </button>
             </div>
           )}
 
-          {/* RichTextarea */}
           <div className="p-4">
+            {!emailVerified && (
+              <p className="mb-3 px-3 py-2 text-[12px] text-foreground-700 bg-accent-100/50 border border-accent-500/30 rounded-xs leading-relaxed">
+                {t('compose.needEmailVerify')}
+              </p>
+            )}
             <RichTextarea
               value={text}
-              onChange={setText}
+              onChange={(v) => {
+                setText(v);
+                if (localError) setLocalError(undefined);
+              }}
               placeholder={placeholder}
               rows={4}
               minHeight="120px"
@@ -159,25 +175,31 @@ export default function ReplyComposer({
               toolbarClassName="border-none px-0 pt-0"
             />
 
-            {/* Action bar */}
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-background-200/40">
               <button
+                type="button"
                 onClick={handleCancel}
-                className="inline-flex items-center px-3 py-1.5 text-[13px] text-foreground-500 hover:text-foreground-700 transition-colors duration-200 cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center px-3 py-1.5 text-[13px] text-foreground-500 hover:text-foreground-700 transition-colors duration-200 cursor-pointer whitespace-nowrap bg-transparent border-none"
               >
                 {t('thread.cancel')}
               </button>
               <button
-                onClick={handleSend}
-                disabled={!text.trim()}
-                className="inline-flex items-center px-4 py-1.5 text-[13px] font-medium bg-primary-500 text-background-50 hover:bg-primary-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer"
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={sending}
+                className={`inline-flex items-center px-4 py-1.5 text-[13px] font-medium bg-primary-500 text-background-50 hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer ${
+                  !text.trim() && !sending ? 'opacity-70' : ''
+                }`}
               >
-                {t('thread.sendReply')}
+                {sending ? t('thread.sending') : t('thread.sendReply')}
               </button>
             </div>
 
-            {/* Inline send error — reuses login page's error color/size, no toast */}
-            {error && <p className="mt-2 text-[13px] text-primary-700">{error}</p>}
+            {displayError && (
+              <p role="alert" className="mt-2 text-[13px] font-medium text-primary-700 leading-relaxed">
+                {displayError}
+              </p>
+            )}
           </div>
         </div>
       </div>

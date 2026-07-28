@@ -137,6 +137,14 @@ export default function ComposePage() {
     setPublishedSlug(slug);
     setLastSaved(null);
     setDraftSeed(null);
+    // 清掉 ?draft= 残留,成功页 URL 干净,避免用户以为还在草稿态
+    // 注意:先设 publishedSlug 再 replace 路由 query,组件仍在同一 /compose 页
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('draft');
+      url.searchParams.delete('edit');
+      window.history.replaceState({}, '', url.pathname + (url.search || ''));
+    }
   }, [editParam, navigate]);
 
   const handleDraftSaved = useCallback((_slug: string, at: Date) => {
