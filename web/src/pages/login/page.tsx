@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +38,13 @@ export default function LoginPage() {
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistDone, setWaitlistDone] = useState(false);
+  // 登录页仪式感:印章延迟盖下一次(非确认时刻,无 seal-stamp 动画;仅入场淡入)。
+  const [sealReady, setSealReady] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSealReady(true), 120);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleWaitlist = async (e: FormEvent) => {
     e.preventDefault();
@@ -93,25 +100,40 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background-50 flex flex-col">
-      <main className="flex-1 flex items-center justify-center px-6">
-        <div className="w-full max-w-[400px]">
-          {/* 画布 2e:表单顶部 34px 印章 */}
-          <BrandMark to="/" showWordmark={false} size="lg" className="mb-6" />
+    <div className="min-h-screen bg-background-50 flex flex-col paper-grain">
+      <main className="flex-1 flex items-center justify-center px-6 py-12 md:py-16">
+        <div className={`w-full max-w-[400px] page-enter ${sealReady ? 'opacity-100' : ''}`}>
+          {/* 画布 2e:表单顶部 34px 印章 — 门槛页多一点仪式感,仍 type-first */}
+          <div
+            className={`mb-7 transition-opacity duration-500 ${sealReady ? 'opacity-100' : 'opacity-0'}`}
+          >
+            <BrandMark to="/" showWordmark={false} size="lg" />
+          </div>
 
-          <h1 className="font-heading text-[26px] md:text-[30px] font-semibold text-foreground-950 mb-2">
+          <p className="font-mono text-[11px] tracking-[0.24em] uppercase text-foreground-400 mb-3">
+            {t('login.kicker')}
+          </p>
+          <h1 className="font-heading text-[28px] md:text-[32px] leading-[1.2] font-semibold text-foreground-950 mb-2.5 tracking-tight">
             {t('login.title')}
           </h1>
-          <p className="text-[14px] text-foreground-400 mb-8">{t('login.deck')}</p>
+          <p className="text-[14px] leading-relaxed text-foreground-600 mb-9 max-w-[28em]">
+            {t('login.deck')}
+          </p>
 
           {error && (
-            <div className="mb-4 px-4 py-3 bg-primary-50/60 rounded-xs text-[13px] text-primary-700">
+            <div
+              role="alert"
+              className="mb-5 px-4 py-3 bg-primary-50 border border-primary-100 rounded-xs text-[13px] leading-relaxed text-primary-700"
+            >
               {error}
             </div>
           )}
 
           {resetSent && (
-            <div className="mb-4 px-4 py-3 bg-background-100 rounded-xs text-[13px] text-foreground-600">
+            <div
+              role="status"
+              className="mb-5 px-4 py-3 bg-background-100 border border-foreground-200/40 rounded-xs text-[13px] leading-relaxed text-foreground-700"
+            >
               {t('reset.sent')}
             </div>
           )}
@@ -129,44 +151,55 @@ export default function LoginPage() {
 
           <OAuthSection loading={loading} onOAuth={handleOAuth} />
 
-          <div className="mt-6 text-center">
-            <Link
-              to="/onboarding"
-              className="text-[13px] text-foreground-500 hover:text-primary-600 transition-colors duration-200"
-            >
-              {t('login.switchToRegister')}
-            </Link>
-          </div>
-
-          <div className="mt-3 text-center">
-            {waitlistDone ? (
-              <p className="text-[13px] text-foreground-600">{t('waitlist.done')}</p>
-            ) : waitlistOpen ? (
-              <form onSubmit={handleWaitlist} className="flex items-center gap-2">
-                <input
-                  type="email"
-                  value={waitlistEmail}
-                  onChange={(e) => setWaitlistEmail(e.target.value)}
-                  placeholder={t('waitlist.placeholder')}
-                  autoComplete="email"
-                  className="flex-1 text-sm bg-background-100 text-foreground-900 placeholder:text-foreground-300 px-4 py-2.5 rounded-xs outline-none focus:bg-background-200/60 transition-colors duration-200"
-                />
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer"
-                >
-                  {t('waitlist.submit')}
-                </button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setWaitlistOpen(true)}
-                className="text-[13px] text-foreground-400 hover:text-primary-600 transition-colors duration-200 cursor-pointer"
+          <div className="mt-7 text-center space-y-3">
+            <div>
+              <Link
+                to="/onboarding"
+                className="text-[13px] text-foreground-600 hover:text-primary-600 transition-colors duration-200"
               >
-                {t('waitlist.prompt')}
-              </button>
-            )}
+                {t('login.switchToRegister')}
+              </Link>
+            </div>
+
+            <div>
+              {waitlistDone ? (
+                <p className="text-[13px] text-foreground-600">{t('waitlist.done')}</p>
+              ) : waitlistOpen ? (
+                <form onSubmit={handleWaitlist} className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    placeholder={t('waitlist.placeholder')}
+                    autoComplete="email"
+                    className="ink-field flex-1 min-w-0"
+                  />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors duration-200 rounded-xs whitespace-nowrap cursor-pointer shrink-0"
+                  >
+                    {t('waitlist.submit')}
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setWaitlistOpen(true)}
+                  className="text-[13px] text-foreground-400 hover:text-primary-600 transition-colors duration-200 cursor-pointer"
+                >
+                  {t('waitlist.prompt')}
+                </button>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <Link
+                to="/"
+                className="text-[12px] text-foreground-400 hover:text-foreground-700 transition-colors duration-200"
+              >
+                ← {t('login.backToHome')}
+              </Link>
+            </div>
           </div>
         </div>
       </main>

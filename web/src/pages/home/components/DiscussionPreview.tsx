@@ -12,15 +12,13 @@ export default function DiscussionPreview() {
   // /api/posts?limit=8 取"最新 8 条、不分类型",不再是 discuss/ask 各半的服务端合并结果——
   // 这个 SSR/客户端行为差异是裁定接受的近似(C2 评审 Finding I4),直到 B2 有专门的首页
   // 策展端点为止。
-  const { data } = useApiData<PostsEnvelope>('posts', '/api/posts?limit=8');
-  // 客户端重取路径下 data 缺省可能是"取数中"而非"确认为空",但 PostList 自身的空态分支
-  // 足以兜住这个短暂窗口,不需要额外的加载态处理。
+  const { data, loading } = useApiData<PostsEnvelope>('posts', '/api/posts?limit=8');
   const items: FeedItem[] = data ? data.posts.map(adaptFeedItem) : [];
 
   return (
     <section className="w-full bg-background-50">
-      <div className="max-w-[720px] mx-auto px-6 py-10 md:py-14">
-        <PostList showHeader items={items} />
+      <div className="max-w-[720px] mx-auto px-6 py-12 md:py-16">
+        <PostList showHeader items={items} loading={!data && loading} />
       </div>
     </section>
   );

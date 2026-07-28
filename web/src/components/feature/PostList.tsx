@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { FeedItem, FeedType } from '@/lib/adapters/types';
 import TypeLabel from '@/components/base/TypeLabel';
 import ChapterLabel from '@/components/base/ChapterLabel';
+import EmptyState from '@/components/base/EmptyState';
 
 type SortMode = 'latest' | 'hottest';
 
@@ -13,13 +14,17 @@ interface PostListProps {
   groupByTime?: boolean;
   className?: string;
   items: FeedItem[];
+  /** 取数中且尚无 items 时展示行骨架(首页 Discussion 等)。 */
+  loading?: boolean;
 }
 
 const TIME_GROUPS: FeedItem['timeGroup'][] = ['today', 'yesterday', 'thisWeek'];
 
 function textFilterClass(isActive: boolean): string {
-  return `transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none p-0 text-[13px] ${
-    isActive ? 'text-foreground-950 font-medium' : 'text-foreground-400 hover:text-foreground-700'
+  return `ink-filter transition-colors duration-200 whitespace-nowrap cursor-pointer bg-transparent border-none p-0 text-[13px] ${
+    isActive
+      ? 'ink-filter-active text-foreground-950 font-medium'
+      : 'text-foreground-400 hover:text-foreground-700'
   }`;
 }
 
@@ -27,7 +32,11 @@ function PostRow({ item }: { item: FeedItem }) {
   const { t } = useTranslation();
   const projectSuffix = item.projectPath ? ` / ${item.projectPath}` : '';
   return (
-    <Link key={item.id} to={`/t/${item.id}`} className="block group py-[15px] border-b border-background-100 last:border-b-0">
+    <Link
+      key={item.id}
+      to={`/t/${item.id}`}
+      className="ink-row block group py-[15px] -mx-2 px-2 border-b border-foreground-200/30 last:border-b-0 rounded-xs"
+    >
       {/* 行 1:66px mono 类型列 + serif 标题 + dot leaders + mono 回复数 */}
       <div className="flex items-baseline min-w-0">
         <span className="w-[66px] shrink-0">
@@ -37,19 +46,44 @@ function PostRow({ item }: { item: FeedItem }) {
           {item.title}
         </span>
         <span className="dot-leaders" />
-        <span className="shrink-0 font-mono text-xs text-foreground-500">
+        <span className="shrink-0 font-mono text-xs text-foreground-500 tabular-nums">
           {item.replyCount} {t('postList.replies')}
         </span>
       </div>
       {/* 行 2:@handle / product-path(mono)· 时间 */}
       <div className="mt-[5px] pl-[66px] text-xs text-foreground-400">
-        <span className="font-mono">@{item.authorHandle}{projectSuffix}</span> · {item.time}
+        <span className="font-mono">@{item.authorHandle}{projectSuffix}</span>
+        <span className="text-foreground-300"> · </span>
+        <span>{item.time}</span>
       </div>
     </Link>
   );
 }
 
-export default function PostList({ showHeader = true, groupByTime = false, className = '', items }: PostListProps) {
+function PostListSkeleton() {
+  return (
+    <div className="flex flex-col border-t border-foreground-200/30" aria-hidden>
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="py-[15px] border-b border-foreground-200/25 last:border-b-0">
+          <div className="flex items-center gap-3">
+            <div className="h-3 w-10 bg-foreground-200/35 rounded-xs shrink-0" />
+            <div className="h-4 flex-1 max-w-sm bg-foreground-200/40 rounded-xs" />
+            <div className="h-3 w-12 bg-foreground-200/25 rounded-xs ml-auto" />
+          </div>
+          <div className="mt-2 pl-[66px] h-3 w-40 bg-foreground-200/25 rounded-xs" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function PostList({
+  showHeader = true,
+  groupByTime = false,
+  className = '',
+  items,
+  loading = false,
+}: PostListProps) {
   const { t } = useTranslation();
   const [typeFilter, setTypeFilter] = useState<FeedType | 'all'>('all');
   const [sortMode, setSortMode] = useState<SortMode>('latest');
@@ -79,7 +113,7 @@ export default function PostList({ showHeader = true, groupByTime = false, class
   return (
     <div className={className}>
       {showHeader && (
-        <div className="flex items-baseline justify-between mb-6">
+        <div className="flex items-baseline justify-between mb-7">
           <ChapterLabel label={t('discussion.label')} sublabel={t('discussion.sublabel')} />
           <Link
             to="/feed"
@@ -90,25 +124,38 @@ export default function PostList({ showHeader = true, groupByTime = false, class
         </div>
       )}
 
-      {/* 文字态筛选行(画布 1b/2a:纯文字变色,无底色 chip) */}
-      <div className="flex items-center gap-4 pb-3.5 border-b border-foreground-200/35">
+      {/* 文字态筛选行(画布 1b/2a:纯文字变色 + 墨线下划线选中态) */}
+      <div className="flex items-center gap-4 pb-3.5 border-b border-foreground-200/40">
         {typeOptions.map((opt) => (
-          <button key={opt.key} onClick={() => setTypeFilter(opt.key)} className={textFilterClass(typeFilter === opt.key)}>
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => setTypeFilter(opt.key)}
+            className={textFilterClass(typeFilter === opt.key)}
+          >
             {opt.label}
           </button>
         ))}
-        <button onClick={() => setSortMode('latest')} className={`ml-auto ${textFilterClass(sortMode === 'latest')}`}>
+        <button
+          type="button"
+          onClick={() => setSortMode('latest')}
+          className={`ml-auto ${textFilterClass(sortMode === 'latest')}`}
+        >
           {t('discussion.sortLatest')}
         </button>
-        <button onClick={() => setSortMode('hottest')} className={textFilterClass(sortMode === 'hottest')}>
+        <button
+          type="button"
+          onClick={() => setSortMode('hottest')}
+          className={textFilterClass(sortMode === 'hottest')}
+        >
           {t('discussion.sortHottest')}
         </button>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="py-16 text-center">
-          <p className="text-[13px] text-foreground-400">{t('feed.noResults')}</p>
-        </div>
+      {loading && items.length === 0 ? (
+        <PostListSkeleton />
+      ) : filtered.length === 0 ? (
+        <EmptyState message={t('feed.noResults')} />
       ) : grouped ? (
         grouped.map(({ group, rows }) => (
           <div key={group}>

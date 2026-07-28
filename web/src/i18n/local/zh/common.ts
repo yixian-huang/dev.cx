@@ -602,6 +602,7 @@ const common: Record<string, string> = {
   "legal.privacy": "《隐私政策》",
 
   // Login
+  "login.kicker": "Account · 登录",
   "login.title": "登录 dev.cx",
   "login.deck": "登录以发布、回复和创建你的创造者主页",
   "login.registerTitle": "加入 dev.cx",

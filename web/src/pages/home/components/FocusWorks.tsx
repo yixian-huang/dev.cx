@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import ChapterLabel from '@/components/base/ChapterLabel';
 import StageBadge from '@/components/base/StageBadge';
 import QuietProjectRow from '@/components/feature/QuietProjectRow';
 import { useApiData } from '@/lib/use-api-data';
@@ -37,16 +38,38 @@ interface FocusWorksProps {
   totalProducts?: number;
 }
 
+function FocusSkeleton({ compact }: { compact: boolean }) {
+  return (
+    <section className="w-full chapter-band" aria-hidden>
+      <div className={`max-w-[720px] mx-auto px-6 ${compact ? 'py-6' : 'py-12 md:py-14'}`}>
+        <div className="h-3 w-36 bg-foreground-200/40 rounded-xs mb-7" />
+        <div className="h-7 w-2/3 max-w-md bg-foreground-200/45 rounded-xs mb-3" />
+        {!compact && <div className="h-4 w-full max-w-lg bg-foreground-200/30 rounded-xs mb-2" />}
+        {!compact && <div className="h-4 w-3/5 max-w-sm bg-foreground-200/25 rounded-xs mb-4" />}
+        <div className="h-3 w-48 bg-foreground-200/30 rounded-xs mb-8" />
+        <div className="space-y-0 border-t border-foreground-200/30">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-3 py-[13px] border-b border-foreground-200/25">
+              <div className="h-4 flex-1 bg-foreground-200/30 rounded-xs" />
+              <div className="h-3 w-12 bg-foreground-200/25 rounded-xs" />
+              <div className="h-3 w-10 bg-foreground-200/20 rounded-xs" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function FocusWorks({ compact = false, totalProducts }: FocusWorksProps) {
   const { t } = useTranslation();
   // B2:焦点 = trending 前 5(近 7 天回复热度,server.mjs home 分支同源注入)。
   const { data, loading } = useApiData<ProjectsEnvelope>('projects', '/api/projects?sort=trending&limit=5');
   const works: FocusWork[] = data ? data.projects.map(adaptFocusWork) : [];
 
-  // 取数中(没有 SSR 值、客户端重取还未回来):没有骨架组件,整块先不渲染,避免闪一下空态。
-  if (!data && loading) return null;
-  // 确认为空(取到了、就是没有项目):装饰性发现区块不是必需内容——直接隐藏整块,
-  // 比硬塞一条编造的"暂无作品"空态更克制。
+  // 取数中:骨架与正式布局同宽同节奏,避免空白闪断。
+  if (!data && loading) return <FocusSkeleton compact={compact} />;
+  // 确认为空:装饰性发现区块不是必需内容——直接隐藏整块。
   if (works.length === 0) return null;
 
   const [lead, ...rest] = works;
@@ -63,33 +86,51 @@ export default function FocusWorks({ compact = false, totalProducts }: FocusWork
 
   return (
     <section className="w-full chapter-band">
-      <div className={`max-w-[720px] mx-auto px-6 ${compact ? 'py-6' : 'py-10 md:py-12'}`}>
+      <div className={`max-w-[720px] mx-auto px-6 ${compact ? 'py-7' : 'py-12 md:py-14'}`}>
         {/* Chapter kicker */}
-        <div className={`flex items-baseline justify-between ${compact ? 'mb-4' : 'mb-7'}`}>
-          <div className="font-mono text-[11px] tracking-[0.24em] text-foreground-400 uppercase">
-            {t('focus.label')} · {t('focus.sublabel')}
-          </div>
+        <div className={`flex items-baseline justify-between gap-4 ${compact ? 'mb-5' : 'mb-8'}`}>
+          <ChapterLabel label={t('focus.label')} sublabel={t('focus.sublabel')} />
           {compact && viewAll}
         </div>
 
-        {/* Lead row */}
-        <div className="mb-2">
+        {/* Lead row — 章节唯一「大声」条目:mono 热门编号 + display 大标题 + deck */}
+        <div className={compact ? 'mb-1' : 'mb-1'}>
           <Link to={`/p/${lead.id}`} className="group block">
-            <h3
-              className={`font-heading font-semibold text-foreground-950 group-hover:text-primary-500 transition-colors duration-200 ${
-                compact ? 'text-[19px] leading-[1.4]' : 'text-2xl leading-[1.35]'
-              }`}
-            >
-              {lead.title}
-            </h3>
-            {!compact && lead.deck && (
-              <p className="mt-2.5 text-[15px] leading-[1.8] text-foreground-700 max-w-[38em] text-pretty">
-                {lead.deck}
-              </p>
-            )}
+            <div className="flex items-start">
+              <span
+                className={`shrink-0 w-7 font-mono font-medium text-accent-500 tracking-[0.06em] select-none ${
+                  compact ? 'text-[11px] mt-1.5' : 'text-[12px] mt-2'
+                }`}
+                aria-hidden
+              >
+                01
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3
+                  className={`font-heading font-semibold text-foreground-950 group-hover:text-primary-500 transition-colors duration-200 text-pretty ${
+                    compact
+                      ? 'text-[19px] leading-[1.35]'
+                      : 'text-[24px] md:text-[26px] leading-[1.3]'
+                  }`}
+                >
+                  {lead.title}
+                </h3>
+                {!compact && lead.deck && (
+                  <p className="mt-3 text-[15px] md:text-base leading-[1.75] text-foreground-700 max-w-[38em] text-pretty">
+                    {lead.deck}
+                  </p>
+                )}
+              </div>
+            </div>
           </Link>
-          <div className={`flex items-center gap-3 text-xs ${compact ? 'mt-[7px]' : 'mt-3'}`}>
-            <span className="font-mono text-[13px] text-foreground-500">{lead.authorHandle}</span>
+          <div
+            className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs pl-7 ${
+              compact ? 'mt-2.5' : 'mt-3.5'
+            }`}
+          >
+            {lead.authorHandle && (
+              <span className="font-mono text-[13px] text-foreground-500">{lead.authorHandle}</span>
+            )}
             <StageBadge stage={lead.stage} />
             {lead.hasFeedbackRequest && (
               <span className="inline-flex items-center gap-[5px] text-accent-600 font-medium">
@@ -101,20 +142,21 @@ export default function FocusWorks({ compact = false, totalProducts }: FocusWork
           </div>
         </div>
 
-        {/* Quiet rows */}
-        <div className={`flex flex-col border-b border-foreground-200/30 ${compact ? 'mt-4' : 'mt-7'}`}>
-          {quiet.map((work) => (
+        {/* Quiet rows — 排印列表,与 Lead 拉开节奏 */}
+        <div className={`flex flex-col border-b border-foreground-200/35 ${compact ? 'mt-5' : 'mt-9'}`}>
+          {quiet.map((work, i) => (
             <QuietProjectRow
               key={work.id}
               id={work.id}
               title={work.title}
               stage={work.stage}
               time={work.updatedAt}
+              index={i + 2}
             />
           ))}
         </div>
 
-        {!compact && <div className="mt-[18px] text-right">{viewAll}</div>}
+        {!compact && <div className="mt-5 text-right">{viewAll}</div>}
       </div>
     </section>
   );

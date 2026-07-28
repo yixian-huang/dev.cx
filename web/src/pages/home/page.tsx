@@ -36,7 +36,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background-50">
       <Navbar />
-      <main className="pt-14 pb-14 md:pb-0">
+      <main className="pt-14 pb-14 md:pb-0 page-enter">
         <SiteMasthead compact={compact} stats={stats} weekly={weeklyLatest ?? undefined} />
         <FocusWorks compact={compact} totalProducts={stats?.products} />
         <DiscussionPreview />

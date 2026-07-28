@@ -605,6 +605,7 @@ const common: Record<string, string> = {
   "legal.privacy": "Privacy Policy",
 
   // Login
+  "login.kicker": "Account · Sign in",
   "login.title": "Sign in to dev.cx",
   "login.deck": "Sign in to post, reply, and build your developer profile",
   "login.registerTitle": "Join dev.cx",

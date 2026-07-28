@@ -14,16 +14,26 @@ interface QuietProjectRowProps {
   title: string;
   stage: string;
   time: string;
+  /** 热门序号(02…);首页 Focus Quiet 行可选,Works 页可省略。 */
+  index?: number;
 }
 
 /** Quiet 产品行(画布 1b Focus / 2c Works 共用):serif 16px 标题 + dot leaders +
  *  mono 大写 stage 字标 + 右对齐时间;行自带 border-t,容器给最后一行补 border-b。 */
-export default function QuietProjectRow({ id, title, stage, time }: QuietProjectRowProps) {
+export default function QuietProjectRow({ id, title, stage, time, index }: QuietProjectRowProps) {
   return (
     <Link
       to={`/p/${id}`}
-      className="group flex items-baseline py-[13px] border-t border-foreground-200/30"
+      className="ink-row group flex items-baseline py-[14px] -mx-2 px-2 border-t border-foreground-200/30 rounded-xs"
     >
+      {typeof index === 'number' && (
+        <span
+          className="shrink-0 w-7 font-mono text-[11px] font-medium tracking-[0.06em] text-foreground-300 group-hover:text-accent-500/80 transition-colors duration-200"
+          aria-hidden
+        >
+          {String(index).padStart(2, '0')}
+        </span>
+      )}
       <span className="font-heading text-base font-medium text-foreground-900 group-hover:text-primary-500 transition-colors duration-200 truncate">
         {title}
       </span>
@@ -35,7 +45,7 @@ export default function QuietProjectRow({ id, title, stage, time }: QuietProject
       >
         {stage}
       </span>
-      <span className="shrink-0 text-xs text-foreground-400 w-[56px] text-right">{time}</span>
+      <span className="shrink-0 text-xs text-foreground-400 w-[56px] text-right tabular-nums">{time}</span>
     </Link>
   );
 }
